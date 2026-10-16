@@ -19,9 +19,34 @@ cd frontend && npm install && npm run dev
 
 Then open http://localhost:5173: the 11 July 2031 case scenario is pre-loaded as WhatsApp reports. Review the draft on **Approval**, approve it, and try parent replies. The full workflow is in [docs/plans/rescheduling.md](docs/plans/rescheduling.md).
 
+## Environment configuration
+
+The backend loads `backend/.env.local`. Start by copying the complete template:
+
+```powershell
+Copy-Item backend/.env.example backend/.env.local
+```
+
+The template groups every backend setting by feature. For the standard local web app, the defaults for
+`DATABASE_PATH` and `BOT_DB_PATH` are sufficient. Fill in `CENTRE_PHONE` if parent messages should display a real
+contact number. `OPENAI_API_KEY` is shared by the AI scheduler and session video review; their models can be
+configured independently with `OPENAI_MODEL` and `OPENAI_VIDEO_MODEL`.
+
+The WhatsApp bot's separate checklist is `bot/.env.example`. Its four Meta credentials are required when running
+the bot. The bot does not automatically load an env file, so set those values in the process environment as shown
+in [bot/README.md](bot/README.md); the remaining bot settings have documented defaults.
+
+## AI-assisted rescheduling
+
 The Approval page supports deterministic rule-based drafting and an AI scheduling agent. To enable the agent,
 set `OPENAI_API_KEY` for the backend process; optionally set `OPENAI_MODEL` (the default is `gpt-5-mini`). The API
 key stays server-side and is never sent to the browser.
+
+## Session video review
+
+Open **Video review** in the app to upload a recording. Source videos and generated clips are stored under
+`backend/data/video-reviews/` and are ignored by Git. The backend extracts a compressed transcript and sampled
+frames for OpenAI analysis, then uses its bundled FFmpeg binary to create the local MP4 clips.
 
 ## WhatsApp absence intake bot
 

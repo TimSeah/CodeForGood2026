@@ -5,6 +5,7 @@ const NAV = [
   { to: "/approval", label: "Approval" },
   { to: "/schedule", label: "Schedule" },
   { to: "/logs", label: "Session logs" },
+  { to: "/video-review", label: "Video review" },
   { to: "/audit", label: "Audit log" },
 ];
 

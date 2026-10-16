@@ -110,5 +110,14 @@ export const sessionLogQuery = z.object({
   therapistId: id.optional(),
 });
 
+// ---- session video review ----
+export const createVideoReviewBody = z.object({
+  fileName: z.string().trim().min(1).max(255),
+  contentType: z.enum(["video/mp4", "video/webm", "video/quicktime", "video/x-matroska"]),
+  sizeBytes: z.number().int().positive().max(1_073_741_824, "Video must be 1 GB or smaller"),
+  actor,
+});
+export const processVideoReviewBody = z.object({ actor });
+
 export const monthQuery = z.object({ month: isoMonth });
 export const auditQuery = z.object({ limit: z.coerce.number().int().min(1).max(500).default(100) });
