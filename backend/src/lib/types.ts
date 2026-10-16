@@ -204,6 +204,44 @@ export interface SessionLog {
   updatedAt: string;
 }
 
+// ---- Session video review -----------------------------------------------------------------------
+
+export type VideoReviewStatus = "uploading" | "uploaded" | "processing" | "completed" | "failed";
+export type VideoMomentType = "possible_escalation" | "recovery" | "notable_progress";
+
+export interface VideoReviewClip {
+  id: number;
+  startSeconds: number;
+  endSeconds: number;
+  eventType: VideoMomentType;
+  /** Observable, neutral description shown beside the clip. */
+  caption: string;
+  confidence: number;
+  /** Local backend media endpoint for this generated clip. */
+  videoUrl: string;
+}
+
+export interface VideoReview {
+  id: number;
+  originalFilename: string;
+  contentType: string;
+  sizeBytes: number;
+  status: VideoReviewStatus;
+  summary: string | null;
+  errorMessage: string | null;
+  /** Local backend media endpoint for the private source video. */
+  videoUrl: string | null;
+  clips: VideoReviewClip[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateVideoReviewResult {
+  review: VideoReview;
+  /** Local API endpoint used by the browser to stream the source file to disk. */
+  uploadUrl: string;
+}
+
 // ---- Monthly allocation (Schedule page) ----------------------------------------------------------
 
 export interface PatternCell {

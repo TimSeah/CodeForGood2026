@@ -19,6 +19,20 @@ cd frontend && npm install && npm run dev
 
 Then open http://localhost:5173: the 11 July 2031 case scenario is pre-loaded as WhatsApp reports. Review the draft on **Approval**, approve it, and try parent replies. The full workflow is in [docs/plans/rescheduling.md](docs/plans/rescheduling.md).
 
+## Session video review
+
+Copy `backend/.env.example` to `backend/.env.local` and add an OpenAI API key:
+
+```env
+OPENAI_API_KEY=your-key-here
+OPENAI_VIDEO_MODEL=gpt-6-luna
+VIDEO_STORAGE_PATH=data/video-reviews
+```
+
+Open **Video review** in the app to upload a recording. Source videos and generated clips are stored under
+`backend/data/video-reviews/` and are ignored by Git. The backend extracts a compressed transcript and sampled
+frames for OpenAI analysis, then uses its bundled FFmpeg binary to create the local MP4 clips.
+
 ## WhatsApp absence intake bot
 
 The [bot](bot/README.md) collects therapist and patient absences through WhatsApp. It uses a separate database and

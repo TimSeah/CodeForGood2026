@@ -7,3 +7,4 @@ next-env.d.ts
 .env
 data/*.db
 data/*.db-*
+data/video-reviews/
