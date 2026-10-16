@@ -49,7 +49,18 @@ export const resolveReportBody = z.union([
 ]);
 
 // ---- plans ----
-export const generatePlanBody = z.object({ date: isoDate, actor });
+export const generatePlanBody = z
+  .object({
+    date: isoDate,
+    mode: z.enum(["rules", "agent"]).default("rules"),
+    prompt: z.string().trim().max(2000).optional(),
+    actor,
+  })
+  .superRefine((body, ctx) => {
+    if (body.mode === "agent" && !body.prompt) {
+      ctx.addIssue({ code: "custom", path: ["prompt"], message: "A prompt is required in AI agent mode" });
+    }
+  });
 export const approvePlanBody = z.object({ notifyMode: z.enum(["whatsapp", "manual"]), actor });
 export const actorBody = z.object({ actor });
 export const editAssignmentBody = z.object({ toTherapistId: z.number().int().positive().nullable(), actor });

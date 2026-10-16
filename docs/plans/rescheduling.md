@@ -32,6 +32,20 @@ Parent response (bot → POST /api/whatsapp/responses, or manual tick)
 
 Therapists are **informed only**; they cannot decline.
 
+## Rule engine or AI scheduling agent
+
+The Approval page can re-draft a date in either mode through the same `POST /api/plans/generate` endpoint:
+
+- **Rule-based logic** is the deterministic optimiser described below (`{ date, mode: "rules" }`).
+- **AI scheduling agent** starts from that safe rule-based draft, accepts an admin instruction, and uses function
+  tools to read the draft, list candidates, change assignments, and validate the result
+  (`{ date, mode: "agent", prompt }`).
+
+Both paths reuse the same candidate ranking and validation modules. The agent works in memory and its changes are
+only written after the validator finds no hard conflicts; the resulting plan still requires admin approval. Set
+`OPENAI_API_KEY` in the backend environment to enable agent mode. `OPENAI_MODEL` is optional and defaults to
+`gpt-5-mini`.
+
 ## Matching rules (engine)
 
 For each session whose therapist is absent in that slot, candidates are therapists who are working (not absent,
@@ -93,7 +107,7 @@ these proactive messages.
 | --- | --- | --- |
 | Intake | `services/intake.ts`, `api/intake/*` | `features/absences/BotReportsPanel.tsx` |
 | Engine | `services/reallocation/{engine,swaps,ranking,distance}.ts` | |
-| Plans/approval | `services/plans.ts`, `api/plans/*` | `features/approval/*` |
+| Plans/approval | `services/plans.ts`, `services/rescheduling-agent.ts`, `api/plans/*` | `features/approval/*` |
 | Messaging | `services/whatsapp/*`, `services/acceptance.ts` | Approval page outbox |
 | Session logs | `repositories/session-logs.ts`, `api/session-logs/*` (+ PDF) | `features/logs/*` |
 | Schedule | `api/schedule/monthly` | `features/schedule/*` (Monthly + Daily tabs) |

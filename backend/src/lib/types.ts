@@ -98,6 +98,7 @@ export interface BotReport {
 
 export type PlanKind = "primary" | "swap_alternative" | "replan";
 export type PlanStatus = "draft" | "approved" | "rejected" | "superseded";
+export type GenerationMode = "rules" | "agent";
 export type NotifyMode = "whatsapp" | "manual";
 /** Which matching rule picked the therapist (see docs/plans/rescheduling.md). */
 export type PlanStep = "team" | "tier" | "history" | "any" | "blacklisted" | "swap" | "cancel" | "manual";

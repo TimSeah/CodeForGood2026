@@ -15,10 +15,10 @@ import { getPreviousSessionLog } from "@/lib/repositories/session-logs";
 import { cancelSession, reassignSession } from "@/lib/repositories/sessions";
 import { getStudent } from "@/lib/repositories/students";
 import type { AssignmentCandidate, NotifyMode, Plan, PlanAssignment } from "@/lib/types";
-import { isAbsent } from "./reallocation/availability";
+import { candidatesForAssignment } from "./reallocation/candidates";
 import { loadDayContext } from "./reallocation/context";
 import { type ProposedAssignment, proposeReallocations } from "./reallocation/engine";
-import { classify, STEP_RANK } from "./reallocation/ranking";
+import { classify } from "./reallocation/ranking";
 import { validatePlan } from "./reallocation/validate";
 import { getWhatsAppGateway } from "./whatsapp/gateway";
 import {
@@ -93,6 +93,63 @@ export function generatePlanForDate(date: string, actor: string): Plan | null {
   return getPlanOrThrow(planId);
 }
 
+/** Persists an agent's in-memory draft only after the shared validator confirms it has no hard conflicts. */
+export function applyAgentDraft(
+  planId: number,
+  assignments: PlanAssignment[],
+  prompt: string,
+  requestedBy: string,
+): Plan {
+  const plan = getPlanOrThrow(planId);
+  if (plan.status !== "draft") throw new HttpError(409, "Only draft plans can be edited");
+  if (
+    assignments.length !== plan.assignments.length ||
+    assignments.some((assignment) => !plan.assignments.some((current) => current.id === assignment.id && current.sessionId === assignment.sessionId))
+  ) {
+    throw new HttpError(400, "The AI agent returned assignments that do not belong to this plan");
+  }
+
+  const ctx = loadDayContext(plan.date);
+  const issues = validatePlan({ ...ctx, assignments });
+  const errors = issues.filter((issue) => issue.level === "error");
+  if (errors.length) throw new HttpError(409, "The AI agent produced an invalid schedule", errors);
+
+  const changes = assignments.filter((assignment) => {
+    const current = plan.assignments.find((item) => item.id === assignment.id)!;
+    return current.toTherapistId !== assignment.toTherapistId || current.rationale.join("\n") !== assignment.rationale.join("\n");
+  });
+  getDb().transaction(() => {
+    for (const assignment of changes) {
+      updateAssignmentTarget(
+        assignment.id,
+        {
+          toTherapistId: assignment.toTherapistId,
+          step: assignment.step,
+          distanceKm: assignment.distanceKm,
+          rationale: assignment.rationale,
+        },
+        false,
+      );
+    }
+    logAudit({
+      actor: "ai-agent",
+      action: "plan.agent_refined",
+      entityType: "plan",
+      entityId: planId,
+      details: {
+        requestedBy,
+        prompt,
+        changes: changes.map((assignment) => ({
+          assignmentId: assignment.id,
+          studentId: assignment.studentId,
+          toTherapistId: assignment.toTherapistId,
+        })),
+      },
+    });
+  })();
+  return getPlanOrThrow(planId);
+}
+
 function applyEdit(plan: Omit<Plan, "issues">, a: PlanAssignment, toTherapistId: number | null, ctx = loadDayContext(plan.date)) {
   if (toTherapistId === null) {
     updateAssignmentTarget(a.id, { toTherapistId: null, step: "cancel", distanceKm: null, rationale: ["Cancelled by admin"] });
@@ -134,49 +191,7 @@ export function listCandidates(planId: number, assignmentId: number): Assignment
   const plan = getPlanOrThrow(planId);
   const a = plan.assignments.find((x) => x.id === assignmentId);
   if (!a) throw new HttpError(404, `Assignment ${assignmentId} is not part of plan ${planId}`);
-  const ctx = loadDayContext(plan.date);
-  const student = ctx.students.get(a.studentId)!;
-
-  // Who is booked in this slot once the OTHER changes in this plan are applied.
-  const bookedWith = new Map<number, string>();
-  const planned = new Map(plan.assignments.filter((x) => x.id !== a.id).map((x) => [x.sessionId, x.toTherapistId]));
-  for (const s of ctx.sessions) {
-    if (s.slot !== a.slot || s.id === a.sessionId || s.status !== "scheduled") continue;
-    const tid = planned.has(s.id) ? planned.get(s.id)! : s.therapistId;
-    if (tid !== null) bookedWith.set(tid, s.studentName);
-  }
-
-  return ctx.therapists
-    .map((t): AssignmentCandidate => {
-      const c = classify(t, student);
-      const absence = ctx.absences.find((x) => x.therapistId === t.id && (x.slot === null || x.slot === a.slot));
-      const unavailableReason = isAbsent(ctx.absences, t.id, a.slot)
-        ? absence?.type === "off"
-          ? "Rostered off"
-          : `Away (${absence?.type})`
-        : ctx.exclusions.get(a.sessionId)?.has(t.id)
-          ? "Parent declined"
-          : bookedWith.has(t.id)
-            ? `Booked with ${bookedWith.get(t.id)}`
-            : null;
-      return {
-        therapistId: t.id,
-        therapistName: t.name,
-        rank: t.rank,
-        step: c.step,
-        distanceKm: c.distanceKm,
-        reasons: c.reasons,
-        available: unavailableReason === null,
-        unavailableReason,
-      };
-    })
-    .sort(
-      (x, y) =>
-        Number(y.available) - Number(x.available) ||
-        STEP_RANK[x.step] - STEP_RANK[y.step] ||
-        (x.distanceKm ?? Infinity) - (y.distanceKm ?? Infinity) ||
-        x.therapistName.localeCompare(y.therapistName),
-    );
+  return candidatesForAssignment(a, plan.assignments, loadDayContext(plan.date));
 }
 
 /**

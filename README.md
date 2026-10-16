@@ -19,6 +19,10 @@ cd frontend && npm install && npm run dev
 
 Then open http://localhost:5173: the 11 July 2031 case scenario is pre-loaded as WhatsApp reports. Review the draft on **Approval**, approve it, and try parent replies. The full workflow is in [docs/plans/rescheduling.md](docs/plans/rescheduling.md).
 
+The Approval page supports deterministic rule-based drafting and an AI scheduling agent. To enable the agent,
+set `OPENAI_API_KEY` for the backend process; optionally set `OPENAI_MODEL` (the default is `gpt-5-mini`). The API
+key stays server-side and is never sent to the browser.
+
 ## WhatsApp absence intake bot
 
 The [bot](bot/README.md) collects therapist and patient absences through WhatsApp. It uses a separate database and

@@ -148,10 +148,11 @@ export function createAssignment(input: {
 export function updateAssignmentTarget(
   id: number,
   input: { toTherapistId: number | null; step: PlanStep; distanceKm: number | null; rationale: string[] },
+  editedByAdmin = true,
 ) {
   getDb()
     .prepare(
-      `UPDATE plan_assignments SET to_therapist_id = ?, step = ?, distance_km = ?, rationale = ?, edited_by_admin = 1,
+      `UPDATE plan_assignments SET to_therapist_id = ?, step = ?, distance_km = ?, rationale = ?, edited_by_admin = ?,
        chain_id = NULL, parent_status = ? WHERE id = ?`,
     )
     .run(
@@ -159,6 +160,7 @@ export function updateAssignmentTarget(
       input.step,
       input.distanceKm,
       JSON.stringify(input.rationale),
+      editedByAdmin ? 1 : 0,
       input.toTherapistId === null ? "not_required" : "pending",
       id,
     );
