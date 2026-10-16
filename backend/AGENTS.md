@@ -139,3 +139,13 @@ have the bot call `POST /api/whatsapp/responses` when parents reply.
 - A session with `therapist_id = NULL` and `status = 'scheduled'` means "needs cover" (parent declined the substitute).
 - Known gaps / good next tasks: real WhatsApp sending, OL/observing availability, therapist phone numbers,
   auth/roles (anyone can call every endpoint), a shared secret on `/api/whatsapp/responses`.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+## This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

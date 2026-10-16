@@ -7,7 +7,7 @@ export const usePlans = (date: string) =>
   useQuery({ queryKey: ["plans", date], queryFn: () => api.get<Plan[]>(`/plans?date=${date}`), refetchInterval: 30_000 });
 
 export const useNotifications = (date: string) =>
-  useQuery({ queryKey: ["notifications", date], queryFn: () => api.get<Notification[]>(`/notifications?date=${date}`) });
+  useQuery({ queryKey: ["notifications", date], queryFn: () => api.get<Notification[]>(`/notifications?date=${date}`), refetchInterval: 10_000 });
 
 export const useCandidates = (planId: number, assignmentId: number, enabled: boolean) =>
   useQuery({

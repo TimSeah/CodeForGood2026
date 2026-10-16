@@ -1,0 +1,17 @@
+# Autism Partnership WhatsApp templates
+
+Submit these seven **Utility** templates for **English (US), `en_US`** in WhatsApp Manager. The names, parameter count/order and document header must match exactly: the bot uses them for approved schedule changes. Meta reviews/approves templates; saving these definitions in this repository does **not** register or approve them. Use fictional sample values (no client data) in Meta's review form. Do not send proactive messages until Meta marks the templates *Approved*. The sender's display name must also be approved.
+
+| Template name | Header | Body (copy exactly) |
+| --- | --- | --- |
+| `ap_parent_confirm` | None | Hello {{1}}, this is Autism Partnership. {{2}}'s session on {{3}} will be covered by {{4}}. Please reply by {{5}}: YES {{6}} to confirm, or NO {{6}} if you would like us to contact you. If we do not hear from you, the session will be cancelled. |
+| `ap_parent_cancelled` | None | Hello {{1}}, we are sorry that {{2}}'s session on {{3}} has been cancelled because a therapist is unavailable. Please call Autism Partnership at {{4}} to discuss next steps. |
+| `ap_parent_call_centre` | None | Thank you for your response about {{1}}'s session. We will review the next steps. Please call Autism Partnership at {{2}} if you would like to discuss them. |
+| `ap_therapist_cover` | None | Hello {{1}}, please cover {{2}}'s {{3}} session on {{4}}. This is subject to the family's confirmation; we will update you. Please review the handover in the staff portal. — Autism Partnership |
+| `ap_therapist_cover_document` | **Document** (upload a fictional sample PDF for review) | Hello {{1}}, please cover {{2}}'s {{3}} session on {{4}}. This is subject to the family's confirmation; we will update you. Please review the attached handover. — Autism Partnership |
+| `ap_therapist_confirmed` | None | Confirmed: {{1}}'s family has accepted the cover for {{2}}. Please proceed with the session. — Autism Partnership |
+| `ap_therapist_stand_down` | None | Update for {{1}}'s session on {{2}}: please do not attend. {{3}}. — Autism Partnership |
+
+Parameter order: parent confirmation = guardian name, child name, session date/time, substitute name, response deadline (SGT), numeric session reference; cancellation = guardian name, child name, session date/time, centre phone; call-centre = child name, centre phone; cover (both variants) = therapist name, child name, location, session date/time; confirmed = child name, session date/time; stand-down = child name, session date/time, reason. Example values for Meta review: `Alex`, `Sam`, `11 Jul 2031, 8:30am–12:00pm`, `Jo Tan`, `11 Jul 2031, 8:15am SGT`, `32`, `+65 6000 0000`, `clinic`, `The family has asked for a different arrangement`. Use *fictional* names and session data only. The bot uploads the shareable PDF to Meta just before sending the document template; private clinical notes are excluded from that PDF.
+
+These templates are transactional updates, not marketing messages. Staff must verify the roster match, guardian consent, and any MC before approving a plan. A parent can have multiple pending sessions: the template includes the reference and asks for `YES 32` or `NO 32` so a reply applies to the intended session. Sending plain `YES` or `NO` only works if exactly one session awaits that phone number's response. Meta can reject or pause templates for policy/quality reasons; check WhatsApp Manager and the approval-page outbox if delivery fails.

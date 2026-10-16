@@ -67,15 +67,22 @@ export const editAssignmentBody = z.object({ toTherapistId: z.number().int().pos
 export const expireBody = z.object({ now: z.iso.datetime({ offset: true }).optional() });
 
 export const parentResponseBody = z.object({ response: z.enum(["accepted", "declined"]), actor });
+export const therapistPhoneBody = z.object({ phone: z.string().regex(/^\+?\d{8,15}$/).nullable(), actor });
+export const guardianPhoneBody = therapistPhoneBody;
 
 /** What the WhatsApp bot posts when a parent replies. It may only know the phone number. */
 export const whatsappResponseBody = z
   .object({
     assignmentId: id.optional(),
-    phone: z.string().max(30).optional(),
+    phone: z.string().min(8).max(30),
+    messageId: z.string().min(1).max(255),
     response: z.enum(["accepted", "declined", "yes", "no"]),
-  })
-  .refine((b) => b.assignmentId !== undefined || b.phone !== undefined, { message: "assignmentId or phone is required" });
+  });
+export const whatsappDeliveryBody = z.object({
+  status: z.enum(["sent", "delivered", "read", "failed"]),
+  messageId: z.string().min(1).max(255).nullable().default(null),
+  error: z.string().max(500).nullable().default(null),
+});
 
 // ---- session logs ----
 const sessionLogFields = {

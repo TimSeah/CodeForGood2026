@@ -14,6 +14,7 @@ export type Location = "clinic" | "home" | "school";
 export type SessionStatus = "scheduled" | "cancelled";
 /** "off" = rostered off (e.g. a part-timer's non-working slot), not a disruption. */
 export type AbsenceType = "annual" | "medical" | "urgent" | "off" | "other";
+export type ParentResponse = "accepted" | "declined";
 
 export interface Therapist {
   id: number;
@@ -185,6 +186,10 @@ export interface Notification {
   attachment: string | null;
   status: "pending" | "sent" | "failed" | "placeholder";
   planAssignmentId: number | null;
+  variables: string[];
+  messageId: string | null;
+  deliveryStatus: "sent" | "delivered" | "read" | "failed" | null;
+  deliveryError: string | null;
   createdAt: string;
 }
 

@@ -24,10 +24,12 @@ import { loadDayContext } from "./reallocation/context";
 import { type ProposedAssignment, proposeReallocations } from "./reallocation/engine";
 import { classify } from "./reallocation/ranking";
 import { validatePlan } from "./reallocation/validate";
-import { getWhatsAppGateway } from "./whatsapp/gateway";
+import { getWhatsAppGateway, therapistPhone } from "./whatsapp/gateway";
 import {
+  CENTRE_PHONE,
   parentCancelledMessage,
   parentConfirmMessage,
+  sessionWhen,
   therapistCoverMessage,
 } from "./whatsapp/messages";
 
@@ -318,23 +320,27 @@ function sendApprovalMessages(plan: Plan) {
     const student = getStudent(a.studentId)!;
     const guardian = { recipientType: "guardian" as const, recipientId: student.id, toPhone: student.guardianPhone, planAssignmentId: a.id };
     if (a.toTherapistId === null) {
-      gateway.send({ ...guardian, purpose: "parent_cancelled", body: parentCancelledMessage(a, plan.date, student) });
+      gateway.send({ ...guardian, purpose: "parent_cancelled", body: parentCancelledMessage(a, plan.date, student),
+        variables: [student.guardianName ?? "there", student.name, sessionWhen(a, plan.date), CENTRE_PHONE] });
       continue;
     }
     gateway.send({
       ...guardian,
       purpose: "parent_confirm",
       body: parentConfirmMessage(a, plan.date, student, deadlineTime(a.startTime)),
+      variables: [student.guardianName ?? "there", student.name, sessionWhen(a, plan.date),
+        a.toTherapistName!, `${plan.date} ${deadlineTime(a.startTime)} SGT`, String(a.id)],
     });
     const previous = getPreviousSessionLog(a.studentId, plan.date, a.slot);
     gateway.send({
       recipientType: "therapist",
       recipientId: a.toTherapistId,
-      toPhone: null, // TODO: therapist phone numbers aren't in the seed data yet
+      toPhone: therapistPhone(a.toTherapistId),
       purpose: "therapist_cover",
       body: therapistCoverMessage(a, plan.date, previous),
       attachment: previous ? `/api/session-logs/${previous.id}/pdf` : null,
       planAssignmentId: a.id,
+      variables: [a.toTherapistName!, a.studentName, a.location, sessionWhen(a, plan.date)],
     });
   }
 }

@@ -11,14 +11,13 @@ import {
 } from "@/lib/repositories/plans";
 import { cancelSession, setSessionTherapist } from "@/lib/repositories/sessions";
 import { getStudent } from "@/lib/repositories/students";
-import type { Plan, PlanAssignment } from "@/lib/types";
+import { getInboundResponse, saveInboundResponse } from "@/lib/repositories/whatsapp-responses";
+import type { ParentResponse, Plan, PlanAssignment } from "@/lib/types";
 import { generatePlanForDate } from "./plans";
-import { getWhatsAppGateway } from "./whatsapp/gateway";
-import { parentCallCentreMessage, therapistConfirmedMessage, therapistStandDownMessage } from "./whatsapp/messages";
+import { getWhatsAppGateway, therapistPhone } from "./whatsapp/gateway";
+import { CENTRE_PHONE, parentCallCentreMessage, sessionWhen, therapistConfirmedMessage, therapistStandDownMessage } from "./whatsapp/messages";
 
 // Parent acceptance after a plan is approved. Therapists are informed only; they cannot decline.
-
-export type ParentResponse = "accepted" | "declined";
 
 function loadPending(assignmentId: number) {
   const a = getAssignment(assignmentId);
@@ -38,24 +37,28 @@ export function recordParentResponse(
   assignmentId: number,
   response: ParentResponse,
   actor: string,
+  inboundId?: string,
 ): { assignment: PlanAssignment; replan: Plan | null } {
   const { a, plan } = loadPending(assignmentId);
   const whatsapp = plan.notifyMode === "whatsapp";
   const gateway = getWhatsAppGateway();
   const student = getStudent(a.studentId)!;
 
+  let replan: Plan | null = null;
   getDb().transaction(() => {
     setParentStatus(a.id, response);
+    if (inboundId) saveInboundResponse(inboundId, a.id, response);
     logAudit({ actor, action: `parent.${response}`, entityType: "plan_assignment", entityId: a.id, details: { planId: plan.id } });
     if (response === "accepted") {
       if (whatsapp) {
         gateway.send({
           recipientType: "therapist",
           recipientId: a.toTherapistId,
-          toPhone: null,
+          toPhone: therapistPhone(a.toTherapistId),
           purpose: "therapist_confirmed",
           body: therapistConfirmedMessage(a, plan.date),
           planAssignmentId: a.id,
+          variables: [a.studentName, sessionWhen(a, plan.date)],
         });
       }
       return;
@@ -70,33 +73,41 @@ export function recordParentResponse(
         purpose: "parent_call_centre",
         body: parentCallCentreMessage(student),
         planAssignmentId: a.id,
+        variables: [student.name, CENTRE_PHONE],
       });
       gateway.send({
         recipientType: "therapist",
         recipientId: a.toTherapistId,
-        toPhone: null,
+        toPhone: therapistPhone(a.toTherapistId),
         purpose: "therapist_stand_down",
         body: therapistStandDownMessage(a, plan.date, "the family has asked for a different arrangement"),
         planAssignmentId: a.id,
+        variables: [a.studentName, sessionWhen(a, plan.date), "The family has asked for a different arrangement"],
       });
     }
+    replan = generatePlanForDate(plan.date, "engine");
   })();
 
-  const replan = response === "declined" ? generatePlanForDate(plan.date, "engine") : null;
   return { assignment: getAssignment(a.id)!, replan };
 }
 
 /** The bot may only know the sender's phone: find the latest change awaiting that guardian's answer. */
 export function findPendingAssignmentByPhone(phone: string): number | null {
-  const row = getDb()
+  const rows = getDb()
     .prepare(
       `SELECT pa.id FROM plan_assignments pa
        JOIN plans p ON p.id = pa.plan_id JOIN sessions se ON se.id = pa.session_id JOIN students s ON s.id = se.student_id
-       WHERE p.status = 'approved' AND pa.parent_status = 'pending' AND REPLACE(s.guardian_phone, ' ', '') = REPLACE(?, ' ', '')
-       ORDER BY se.date, se.start_time LIMIT 1`,
+       WHERE p.status = 'approved' AND p.notify_mode = 'whatsapp' AND pa.parent_status = 'pending'
+       AND REPLACE(REPLACE(REPLACE(s.guardian_phone, '+', ''), '-', ''), ' ', '') = ?
+       ORDER BY se.date, se.start_time LIMIT 2`,
     )
-    .get(phone) as { id: number } | undefined;
-  return row?.id ?? null;
+    .all(phone.replace(/\D/g, "")) as { id: number }[];
+  if (rows.length > 1) throw new HttpError(409, "Multiple sessions need a reply; include the reference number (YES 123 or NO 123)");
+  return rows[0]?.id ?? null;
+}
+
+export function recordedInboundResponse(messageId: string) {
+  return getInboundResponse(messageId);
 }
 
 /**
@@ -116,10 +127,11 @@ export function expireOverdueAcceptances(now: Date = new Date()): number[] {
         getWhatsAppGateway().send({
           recipientType: "therapist",
           recipientId: a.toTherapistId,
-          toPhone: null,
+          toPhone: therapistPhone(a.toTherapistId),
           purpose: "therapist_stand_down",
           body: therapistStandDownMessage(a, plan.date, "the parent didn't confirm in time, so the session is cancelled"),
           planAssignmentId: id,
+          variables: [a.studentName, sessionWhen(a, plan.date), "The family did not confirm in time"],
         });
       }
     })();

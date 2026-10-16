@@ -9,7 +9,7 @@ product owner on 16 Oct 2026. Treat them as requirements unless the team changes
 WhatsApp bot (bot/, separate SQLite)
    │  role=therapist|patient, name, start/end date, day_part, MC flag
    ▼
-Backend intake  (POST /api/intake/sync, also polled by the Disruptions page every 30 s)
+Backend intake  (POST /api/intake/sync, called by the bot and Disruptions page every 30 s)
    │  name → roster match (case-insensitive). Unmatched → shown on the Disruptions page for the admin to map.
    │  therapist report → absences rows;  patient report → that child's sessions cancelled (frees the therapist)
    ▼
@@ -90,16 +90,20 @@ the admin can choose instead, and **only if it avoids a cancellation** (`ENGINE_
 - `session_logs`: attendance, shareable summary, private notes, goals; used for "history" in the engine
 - `reallocations` is replaced by `plans` + `plan_assignments`
 
-## WhatsApp integration (placeholder)
+## WhatsApp integration
 
-The bot can't send messages yet. It only replies to inbound messages and has no HTTP API apart from `/webhook`.
-The backend has a `WhatsAppGateway` interface (`backend/src/lib/services/whatsapp/`). Today a placeholder
-implementation writes every outgoing message to the `notifications` table (visible on the Approval page) and logs
-it. **TODO (bot team):** expose a send endpoint (with template support for proactive messages, plus document
-upload for the PDF), set `BOT_API_URL`, and call `POST /api/whatsapp/responses` when a parent replies.
+The bot and backend share the bot's SQLite file for report intake. On approval, the backend commits notifications
+to its own outbox; the bot polls authenticated local endpoints, sends Meta-approved templates (uploading the
+shareable PDF for therapist handover), and returns send/delivery/read/failure status. Parent replies are posted
+back with the Meta inbound message ID for idempotency. The Approval page shows the current status and errors.
+Unsent messages remain visible for staff follow-up; no notification is considered sent merely because a plan
+was approved. Without `BOT_SHARED_SECRET` the backend leaves messages as placeholders.
 
-Meta's rules need **pre-approved templates** for messages sent outside the 24-hour window, which covers all of
-these proactive messages.
+Configure both services and submit the [template copy](./whatsapp-templates.md) for Meta approval before
+selecting automated WhatsApp notifications. This prototype still requires staff verification before approving
+an unverified WhatsApp intake report, and its backend API has no admin authentication; keep it local/private.
+For a short local POC, `POC_SESSION_MESSAGES=true` sends the backend's standard text only to contacts who
+messaged the bot within the last 23.5 hours; it does not send PDFs or bypass Meta's conversation window.
 
 ## Where things live
 
