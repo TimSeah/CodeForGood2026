@@ -11,22 +11,25 @@ import type { VideoReviewClipInput } from "@/lib/repositories/video-reviews";
 import { resolveVideoStoragePath } from "./local-video";
 
 const execFileAsync = promisify(execFile);
-const FRAME_INTERVAL_SECONDS = 3;
-const MAX_FRAMES = 400;
+// Six-second sampling plus even downsampling keeps a 45-minute recording within the model request
+// while still including frames from the beginning, middle, and end of the whole session.
+const FRAME_INTERVAL_SECONDS = 6;
+const MAX_FRAMES = 500;
 
 const analysisSchema = z.object({
-  summary: z.string().min(1).max(1_500),
+  summary: z.string().min(1).max(500),
   moments: z
     .array(
       z.object({
         startSeconds: z.number().nonnegative(),
         endSeconds: z.number().positive(),
         eventType: z.enum(["possible_escalation", "recovery", "notable_progress"]),
+        title: z.string().trim().min(1).max(60),
         caption: z.string().min(1).max(300),
         confidence: z.number().min(0).max(1),
       }),
     )
-    .max(12),
+    .max(8),
 });
 
 async function runFfmpeg(args: string[]): Promise<void> {
@@ -40,9 +43,24 @@ async function runFfmpeg(args: string[]): Promise<void> {
 }
 
 function timestamp(seconds: number): string {
+  const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor(seconds / 60);
   const remainder = Math.floor(seconds % 60);
+  if (hours > 0) {
+    return `${String(hours).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
+  }
   return `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
+}
+
+async function videoDurationSeconds(videoPath: string): Promise<number> {
+  try {
+    await execFileAsync(ffmpeg.path, ["-hide_banner", "-i", videoPath], { maxBuffer: 2 * 1024 * 1024 });
+  } catch (error) {
+    const stderr = error && typeof error === "object" && "stderr" in error ? String(error.stderr) : "";
+    const match = /Duration:\s*(\d+):(\d+):([\d.]+)/.exec(stderr);
+    if (match) return Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
+  }
+  throw new Error("FFmpeg could not read the video duration.");
 }
 
 async function transcribe(client: OpenAI, audioPath: string): Promise<string> {
@@ -59,8 +77,13 @@ async function transcribe(client: OpenAI, audioPath: string): Promise<string> {
 }
 
 async function analyzeFrames(client: OpenAI, transcript: string, frameDirectory: string) {
-  const frameNames = (await readdir(frameDirectory)).filter((name) => name.endsWith(".jpg")).sort();
-  if (frameNames.length === 0) throw new Error("No readable video frames were found.");
+  const allFrameNames = (await readdir(frameDirectory)).filter((name) => name.endsWith(".jpg")).sort();
+  if (allFrameNames.length === 0) throw new Error("No readable video frames were found.");
+  const frameNames = allFrameNames.length <= MAX_FRAMES
+    ? allFrameNames
+    : Array.from({ length: MAX_FRAMES }, (_, index) =>
+        allFrameNames[Math.round((index * (allFrameNames.length - 1)) / (MAX_FRAMES - 1))],
+      );
 
   const content: Array<
     | { type: "input_text"; text: string }
@@ -70,9 +93,11 @@ async function analyzeFrames(client: OpenAI, transcript: string, frameDirectory:
       type: "input_text",
       text: `Review this recorded therapy or learning session using only observable actions and speech. Do not diagnose, label intent, or make clinical conclusions.
 
-Create a short factual summary covering the activity, the child's responses, strategies used by the therapist, transitions, and the outcome. Identify up to 12 moments that would help a qualified reviewer, especially possible escalation (for example sustained crying, shouting, hitting, throwing objects, fleeing, or loss of safe participation), recovery, and notable progress.
+Write an overall gist in at most two short sentences. Do not narrate the session in order or list routine activities. Focus on the main pattern and only meaningful details a covering therapist should know, such as a clear escalation, what preceded it, the response, recovery, or a notable success. Use neutral wording (for example, "shouted and pushed a chair" rather than "had a tantrum").
 
-Moment captions must be neutral and specific. Times must match the timestamp immediately before each sampled frame and the timestamped transcript. Make each moment 5 to 30 seconds long. If the evidence is uncertain, omit the moment rather than guessing.
+Identify up to 8 short clips of important moments only: possible escalation (such as sustained crying, shouting, hitting, throwing objects, or leaving the activity), recovery, or notable progress. Give each clip a plain title of 2–6 words (for example, "Pushed a chair" or "Shouted during transition") and a one-sentence factual caption. Do not create clips for routine activity.
+
+Times must match the timestamped transcript and sampled frames. Make each moment 5 to 30 seconds long and include a little context before and after. If evidence is uncertain, omit the moment rather than guessing.
 
 Timestamped transcript:
 ${transcript || "(No intelligible speech was transcribed.)"}`,
@@ -80,7 +105,8 @@ ${transcript || "(No intelligible speech was transcribed.)"}`,
   ];
 
   for (let index = 0; index < frameNames.length; index += 1) {
-    const seconds = index * FRAME_INTERVAL_SECONDS;
+    const frameNumber = Number(/frame-(\d+)\.jpg$/.exec(frameNames[index])?.[1] ?? index + 1);
+    const seconds = (frameNumber - 1) * FRAME_INTERVAL_SECONDS;
     const image = await readFile(path.join(frameDirectory, frameNames[index]));
     content.push({ type: "input_text", text: `Sampled frame at ${timestamp(seconds)} (${seconds} seconds)` });
     content.push({ type: "input_image", image_url: `data:image/jpeg;base64,${image.toString("base64")}`, detail: "low" });
@@ -99,7 +125,7 @@ ${transcript || "(No intelligible speech was transcribed.)"}`,
 export async function analyzeSessionVideo(
   sourceStoragePath: string,
 ): Promise<{ summary: string; clips: VideoReviewClipInput[] }> {
-  if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not configured in backend/.env.local.");
+  if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not configured in backend/.env.");
 
   const sourcePath = resolveVideoStoragePath(sourceStoragePath);
   const sessionDirectory = path.dirname(sourcePath);
@@ -117,14 +143,13 @@ export async function analyzeSessionVideo(
         sourcePath,
         "-vf",
         `fps=1/${FRAME_INTERVAL_SECONDS},scale=480:-2`,
-        "-frames:v",
-        String(MAX_FRAMES),
         "-q:v",
         "5",
         path.join(frameDirectory, "frame-%05d.jpg"),
       ]),
     ]);
 
+    const durationSeconds = await videoDurationSeconds(sourcePath);
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const transcript = await transcribe(client, audioPath);
     const analysis = await analyzeFrames(client, transcript, frameDirectory);
@@ -134,7 +159,7 @@ export async function analyzeSessionVideo(
       const moment = analysis.moments[index];
       const startSeconds = Math.max(0, Math.floor(moment.startSeconds - 3));
       const requestedEnd = Math.max(moment.endSeconds + 4, startSeconds + 5);
-      const endSeconds = Math.min(startSeconds + 35, requestedEnd);
+      const endSeconds = Math.min(durationSeconds, startSeconds + 35, requestedEnd);
       const clipStoragePath = path.posix.join(path.posix.dirname(sourceStoragePath), `clip-${index + 1}.mp4`);
       await runFfmpeg([
         "-ss",
@@ -161,6 +186,7 @@ export async function analyzeSessionVideo(
         startSeconds,
         endSeconds,
         eventType: moment.eventType,
+        title: moment.title,
         caption: moment.caption,
         confidence: moment.confidence,
         storagePath: clipStoragePath,

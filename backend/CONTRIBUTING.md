@@ -8,7 +8,7 @@ layering rules are in [AGENTS.md](AGENTS.md) — read that before writing code.
 ```bash
 cd backend
 npm install
-cp .env.example .env.local     # optional; defaults work
+cp .env.example .env           # optional; defaults work
 npm run db:reset               # creates data/app.db with the July 2031 case data + 11 July scenario
 npm run dev                    # http://localhost:3001/api/health
 ```

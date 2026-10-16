@@ -24,15 +24,15 @@ Review the draft on **Approval**, approve it, and try parent replies. The full w
 
 ## Environment configuration
 
-The backend loads `backend/.env.local`. Start by copying the complete template:
+The backend loads `backend/.env`. Start by copying the complete template:
 
 ```powershell
-Copy-Item backend/.env.example backend/.env.local
+Copy-Item backend/.env.example backend/.env
 ```
 
 The template groups every backend setting by feature. For the standard local web app, the defaults for
 `DATABASE_PATH` and `BOT_DB_PATH` are sufficient. Fill in `CENTRE_PHONE` if parent messages should display a real
-contact number. `OPENAI_API_KEY` is shared by the AI scheduler and session video review; their models can be
+contact number. `OPENAI_API_KEY` is shared by the AI scheduler and session video summaries; their models can be
 configured independently with `OPENAI_MODEL` and `OPENAI_VIDEO_MODEL`.
 
 The WhatsApp bot's separate checklist is `bot/.env.example`. Its four Meta credentials are required when running
@@ -45,11 +45,13 @@ The Approval page supports deterministic rule-based drafting and an AI schedulin
 set `OPENAI_API_KEY` for the backend process; optionally set `OPENAI_MODEL` (the default is `gpt-5-mini`). The API
 key stays server-side and is never sent to the browser.
 
-## Session video review
+## Session videos
 
-Open **Video review** in the app to upload a recording. Source videos and generated clips are stored under
-`backend/data/video-reviews/` and are ignored by Git. The backend extracts a compressed transcript and sampled
-frames for OpenAI analysis, then uses its bundled FFmpeg binary to create the local MP4 clips.
+Therapists can attach a recording to a **Session log**. The original video stays on the backend computer and is
+not analyzed during upload. A therapist can request a gist and short, titled clips from the log, or an approved
+cover assignment can trigger the same processing so the incoming therapist sees the handover. Source videos and
+generated clips are stored under `backend/data/video-reviews/` and are ignored by Git; the backend uses its
+bundled FFmpeg binary to create local MP4 clips.
 
 ## WhatsApp absence intake bot
 
