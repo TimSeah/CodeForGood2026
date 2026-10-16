@@ -6,6 +6,3 @@ Thumbs.db
 *.db
 *.db-wal
 *.db-shm
-*.sqlite
-*.sqlite-shm
-*.sqlite-wal
