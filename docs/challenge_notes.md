@@ -211,6 +211,10 @@ Cancellation Message
 - Standardised messages to the parents (No template to make it human as possible)
 - Do not use this auto-generation
 
+Edge Cases:
+- Communicate via WhatsApp
+- Mentally tracking parents preferences
+- Don't respond by 7:30 (have to call) operational failure, go all the way to their house and the family cancels > Ask therapist to come back to the centre > Schedule another day
 
 Tiers: By payment for therapists
 
