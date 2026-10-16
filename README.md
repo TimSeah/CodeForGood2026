@@ -13,14 +13,11 @@ engine propose replacements (with reasons), approve or reject them, and keep a f
 ## Web app quick start (Node 22+)
 
 ```bash
-npm run setup
-npm run dev
+cd backend && npm install && npm run db:reset && npm run dev
+cd frontend && npm install && npm run dev
 ```
 
-Run `npm run setup` once after cloning. After that, `npm run dev` starts the backend and frontend together; press
-Ctrl+C to stop both. Open http://localhost:5173: the 11 July 2031 case scenario is pre-loaded as WhatsApp reports.
-Review the draft on **Approval**, approve it, and try parent replies. The full workflow is in
-[docs/plans/rescheduling.md](docs/plans/rescheduling.md).
+Then open http://localhost:5173: the 11 July 2031 case scenario is pre-loaded as WhatsApp reports. Review the draft on **Approval**, approve it, and try parent replies. The full workflow is in [docs/plans/rescheduling.md](docs/plans/rescheduling.md).
 
 ## Environment configuration
 
