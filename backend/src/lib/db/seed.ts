@@ -9,6 +9,16 @@ import { MOCK_BLACKLIST, MOCK_PAST_COVERS, mockLogContent, mockStudentProfile } 
 const CASE_FIRST_MONDAY = 3; // day-of-month of the first Monday in July 2031 per the case sheets
 const PUBLIC_HOLIDAYS = new Set(["2031-07-10"]);
 export const SEED_MONTH = "2031-07";
+// Keep the demo calendar readable: one historical workweek (including all mocked past covers)
+// plus the complete case-study disruption day. The recurring allocation table still covers July.
+const DEMO_SESSION_DATES = new Set([
+  "2031-07-03",
+  "2031-07-04",
+  "2031-07-05",
+  "2031-07-06",
+  "2031-07-07",
+  "2031-07-11",
+]);
 /** Session logs are mocked for every session before this date. */
 const LOGS_UNTIL = "2031-07-08";
 
@@ -19,7 +29,7 @@ function workingDays(): { date: string; group: "MWF" | "TT" }[] {
   for (let d = 1; d <= 31; d++) {
     const date = `${SEED_MONTH}-${String(d).padStart(2, "0")}`;
     const group = WEEKDAY_GROUP[(((d - CASE_FIRST_MONDAY) % 7) + 7) % 7];
-    if (group && !PUBLIC_HOLIDAYS.has(date)) out.push({ date, group });
+    if (group && DEMO_SESSION_DATES.has(date) && !PUBLIC_HOLIDAYS.has(date)) out.push({ date, group });
   }
   return out;
 }
@@ -37,7 +47,7 @@ const TABLES = [
   "weekly_patterns", "student_blacklist", "sessions", "team_members", "students", "therapists", "audit_log",
 ];
 
-/** Wipes all data tables and inserts therapists, students, teams, patterns, a month of sessions and past logs. */
+/** Wipes all data tables and inserts the roster, monthly patterns, focused demo sessions and past logs. */
 export function seedBaseData(db: Database.Database) {
   db.transaction(() => {
     for (const t of TABLES) db.exec(`DELETE FROM ${t}`);

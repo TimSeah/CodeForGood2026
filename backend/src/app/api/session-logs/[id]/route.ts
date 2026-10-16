@@ -18,6 +18,6 @@ export const PATCH = handle(async (req: Request, ctx: Ctx) => {
 export const DELETE = handle(async (req: Request, ctx: Ctx) => {
   const id = idParam.parse((await ctx.params).id);
   const { actor } = actorBody.parse(await req.json().catch(() => ({})));
-  removeSessionLog(id, actor);
+  await removeSessionLog(id, actor);
   return ok({ id });
 });

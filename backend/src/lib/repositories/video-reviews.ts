@@ -3,6 +3,7 @@ import type { VideoMomentType, VideoReview, VideoReviewClip, VideoReviewStatus }
 
 interface VideoReviewRow {
   id: number;
+  session_log_id: number | null;
   storage_path: string;
   original_filename: string;
   content_type: string;
@@ -20,16 +21,17 @@ interface VideoReviewClipRow {
   start_seconds: number;
   end_seconds: number;
   event_type: VideoMomentType;
+  title: string;
   caption: string;
   confidence: number;
   storage_path: string;
 }
 
-export interface StoredVideoReviewClip extends Omit<VideoReviewClip, "videoUrl"> {
+export interface StoredVideoReviewClip extends VideoReviewClip {
   storagePath: string;
 }
 
-export interface StoredVideoReview extends Omit<VideoReview, "videoUrl" | "clips"> {
+export interface StoredVideoReview extends Omit<VideoReview, "clips"> {
   storagePath: string;
   clips: StoredVideoReviewClip[];
 }
@@ -38,6 +40,7 @@ export interface VideoReviewClipInput {
   startSeconds: number;
   endSeconds: number;
   eventType: VideoMomentType;
+  title: string;
   caption: string;
   confidence: number;
   storagePath: string;
@@ -48,6 +51,7 @@ const toClip = (row: VideoReviewClipRow): StoredVideoReviewClip => ({
   startSeconds: row.start_seconds,
   endSeconds: row.end_seconds,
   eventType: row.event_type,
+  title: row.title,
   caption: row.caption,
   confidence: row.confidence,
   storagePath: row.storage_path,
@@ -63,6 +67,7 @@ function clipsFor(reviewId: number): StoredVideoReviewClip[] {
 
 const toReview = (row: VideoReviewRow): StoredVideoReview => ({
   id: row.id,
+  sessionLogId: row.session_log_id!,
   storagePath: row.storage_path,
   originalFilename: row.original_filename,
   contentType: row.content_type,
@@ -84,7 +89,41 @@ export function getVideoReview(id: number): StoredVideoReview | null {
   return row ? toReview(row) : null;
 }
 
+export function getVideoReviewForSessionLog(sessionLogId: number): StoredVideoReview | null {
+  const row = getDb()
+    .prepare("SELECT * FROM video_reviews WHERE session_log_id = ?")
+    .get(sessionLogId) as VideoReviewRow | undefined;
+  return row ? toReview(row) : null;
+}
+
+/** Most recent earlier session video for a child, used to prepare an incoming cover therapist. */
+export function getLatestVideoForStudent(studentId: number, date: string, slot: "AM" | "PM"): StoredVideoReview | null {
+  const row = getDb()
+    .prepare(
+      `SELECT vr.* FROM video_reviews vr
+       JOIN session_logs sl ON sl.id = vr.session_log_id
+       WHERE sl.student_id = ?
+         AND (sl.date < ? OR (sl.date = ? AND sl.slot < ?))
+       ORDER BY sl.date DESC, CASE sl.slot WHEN 'PM' THEN 1 ELSE 0 END DESC, vr.id DESC
+       LIMIT 1`,
+    )
+    .get(studentId, date, date, slot) as VideoReviewRow | undefined;
+  return row ? toReview(row) : null;
+}
+
+/** Domain shape for session-log responses; storage paths never leave the repository. */
+export function getSessionLogVideo(sessionLogId: number): VideoReview | null {
+  const stored = getVideoReviewForSessionLog(sessionLogId);
+  if (!stored) return null;
+  const { storagePath: _storagePath, clips, ...review } = stored;
+  return {
+    ...review,
+    clips: clips.map(({ storagePath: _clipStoragePath, ...clip }) => clip),
+  };
+}
+
 export function createVideoReview(input: {
+  sessionLogId: number;
   storagePath: string;
   originalFilename: string;
   contentType: string;
@@ -92,10 +131,10 @@ export function createVideoReview(input: {
 }): number {
   const result = getDb()
     .prepare(
-      `INSERT INTO video_reviews (storage_path, original_filename, content_type, size_bytes)
-       VALUES (?, ?, ?, ?)`,
+      `INSERT INTO video_reviews (session_log_id, storage_path, original_filename, content_type, size_bytes)
+       VALUES (?, ?, ?, ?, ?)`,
     )
-    .run(input.storagePath, input.originalFilename, input.contentType, input.sizeBytes);
+    .run(input.sessionLogId, input.storagePath, input.originalFilename, input.contentType, input.sizeBytes);
   return Number(result.lastInsertRowid);
 }
 
@@ -114,11 +153,11 @@ export function completeVideoReview(id: number, summary: string, clips: VideoRev
   db.prepare("DELETE FROM video_review_clips WHERE review_id = ?").run(id);
   const insert = db.prepare(
     `INSERT INTO video_review_clips
-     (review_id, start_seconds, end_seconds, event_type, caption, confidence, storage_path)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+     (review_id, start_seconds, end_seconds, event_type, title, caption, confidence, storage_path)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   for (const clip of clips) {
-    insert.run(id, clip.startSeconds, clip.endSeconds, clip.eventType, clip.caption, clip.confidence, clip.storagePath);
+    insert.run(id, clip.startSeconds, clip.endSeconds, clip.eventType, clip.title, clip.caption, clip.confidence, clip.storagePath);
   }
   db.prepare(
     `UPDATE video_reviews

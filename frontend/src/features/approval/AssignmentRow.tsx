@@ -9,7 +9,7 @@ import { ReasonPicker } from "./ReasonPicker";
 
 /** Column layout shared by the row and the header in DraftPlanCard. Stacks on narrow screens. */
 export const ROW_GRID =
-  "md:grid md:grid-cols-[96px_minmax(120px,1fr)_minmax(190px,1.3fr)_minmax(200px,1.6fr)_116px] md:gap-4 md:items-start";
+  "md:grid md:grid-cols-[96px_minmax(120px,1fr)_minmax(190px,1.3fr)_minmax(200px,1.6fr)_116px] md:gap-0 md:items-start md:[&>*]:px-2 md:[&>*+*]:border-l md:[&>*+*]:border-line-soft md:[&>*:first-child]:pl-0 md:[&>*:last-child]:pr-0";
 
 /** One changed session in a plan. Drafts can be edited; the backend re-validates after every change. */
 export function AssignmentRow({
@@ -97,7 +97,7 @@ export function AssignmentRow({
             {editable && <RowActions a={a} onReject={() => setRejecting(true)} />}
           </div>
           {rejecting && (
-            <div className="md:col-span-5">
+            <div className="md:col-span-5 md:!border-l-0 md:!px-0">
               <RejectWithReason a={a} onDone={() => setRejecting(false)} />
             </div>
           )}

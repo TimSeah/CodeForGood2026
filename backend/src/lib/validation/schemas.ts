@@ -15,7 +15,12 @@ export const dateQuery = z.object({ date: isoDate });
 
 export const sessionsQuery = z.union([
   z.object({ date: isoDate }),
-  z.object({ month: isoMonth, therapistId: id.optional(), studentId: id.optional() }),
+  z.object({
+    month: isoMonth,
+    therapistId: id.optional(),
+    studentId: id.optional(),
+    confirmed: z.enum(["true"]).transform(() => true).optional(),
+  }),
 ]);
 
 export const createAbsenceBody = z.object({
@@ -135,6 +140,7 @@ export const createVideoReviewBody = z.object({
   actor,
 });
 export const processVideoReviewBody = z.object({ actor });
+export const prepareVideoHandoverBody = z.object({ studentId: id, date: isoDate, slot, actor });
 
 // ---- scheduling preferences ----
 const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Expected HH:MM (24h)");

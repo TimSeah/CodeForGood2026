@@ -7,7 +7,7 @@ import { DisruptionsPage } from "@/features/disruptions/DisruptionsPage";
 import { LogsPage } from "@/features/logs/LogsPage";
 import { PreferencesPage } from "@/features/preferences/PreferencesPage";
 import { SchedulePage } from "@/features/schedule/SchedulePage";
-import { VideoReviewPage } from "@/features/video-review/VideoReviewPage";
+import { ConfirmedCalendarPage } from "@/features/calendar/ConfirmedCalendarPage";
 
 // Route table. Add new pages here and a matching link in components/AppLayout.tsx.
 export default function App() {
@@ -19,8 +19,8 @@ export default function App() {
         <Route path="replies" element={<RepliesPage />} />
         <Route path="preferences" element={<PreferencesPage />} />
         <Route path="schedule" element={<SchedulePage />} />
+        <Route path="calendar" element={<ConfirmedCalendarPage />} />
         <Route path="logs" element={<LogsPage />} />
-        <Route path="video-review" element={<VideoReviewPage />} />
         <Route path="audit" element={<AuditPage />} />
       </Route>
     </Routes>

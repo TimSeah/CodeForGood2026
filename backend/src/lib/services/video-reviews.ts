@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { stat } from "node:fs/promises";
+import { rm, stat } from "node:fs/promises";
 import { getDb } from "@/lib/db/client";
 import { HttpError } from "@/lib/http";
 import { logAudit } from "@/lib/repositories/audit";
@@ -7,11 +7,14 @@ import {
   completeVideoReview,
   createVideoReview,
   getVideoReview,
-  listVideoReviews,
+  getVideoReviewForSessionLog,
+  getLatestVideoForStudent,
+  getSessionLogVideo,
   setVideoReviewStatus,
   type StoredVideoReview,
 } from "@/lib/repositories/video-reviews";
 import type { CreateVideoReviewResult, VideoReview } from "@/lib/types";
+import { getSessionLog } from "@/lib/repositories/session-logs";
 import { analyzeSessionVideo } from "./openai-video";
 import { assertLocalVideo, resolveVideoStoragePath, storagePathFor, writeVideoUpload } from "./local-video";
 
@@ -23,15 +26,7 @@ const EXTENSIONS: Record<string, string> = {
 };
 
 function exposeReview(stored: StoredVideoReview): VideoReview {
-  const { storagePath: _storagePath, clips, ...review } = stored;
-  return {
-    ...review,
-    videoUrl: review.status === "uploading" ? null : `/api/video-reviews/${review.id}/media`,
-    clips: clips.map(({ storagePath: _clipPath, ...clip }) => ({
-      ...clip,
-      videoUrl: `/api/video-reviews/${review.id}/media?clipId=${clip.id}`,
-    })),
-  };
+  return getSessionLogVideo(stored.sessionLogId)!;
 }
 
 function getReviewOrThrow(id: number): StoredVideoReview {
@@ -40,14 +35,23 @@ function getReviewOrThrow(id: number): StoredVideoReview {
   return review;
 }
 
-export function listSessionVideoReviews(): VideoReview[] {
-  return listVideoReviews().map(exposeReview);
-}
-
 export function prepareSessionVideoUpload(
+  sessionLogId: number,
   input: { fileName: string; contentType: string; sizeBytes: number },
   actor: string,
 ): CreateVideoReviewResult {
+  if (!getSessionLog(sessionLogId)) throw new HttpError(404, `Session log ${sessionLogId} not found`);
+  const attached = getVideoReviewForSessionLog(sessionLogId);
+  if (attached) {
+    if (
+      attached.status === "uploading" &&
+      attached.originalFilename === input.fileName &&
+      attached.sizeBytes === input.sizeBytes
+    ) {
+      return { review: exposeReview(attached), uploadUrl: `/api/session-logs/${sessionLogId}/video/upload` };
+    }
+    throw new HttpError(409, "This session log already has a video attached.");
+  }
   const storagePath = storagePathFor(
     new Date().toISOString().slice(0, 10),
     randomUUID(),
@@ -55,6 +59,7 @@ export function prepareSessionVideoUpload(
   );
   const id = getDb().transaction(() => {
     const reviewId = createVideoReview({
+      sessionLogId,
       storagePath,
       originalFilename: input.fileName,
       contentType: input.contentType,
@@ -62,35 +67,36 @@ export function prepareSessionVideoUpload(
     });
     logAudit({
       actor,
-      action: "video_review.created",
-      entityType: "video_review",
-      entityId: reviewId,
+      action: "session_video.upload_started",
+      entityType: "session_log",
+      entityId: sessionLogId,
       details: { fileName: input.fileName, sizeBytes: input.sizeBytes, storage: "local" },
     });
     return reviewId;
   })();
-  return { review: exposeReview(getReviewOrThrow(id)), uploadUrl: `/api/video-reviews/${id}/upload` };
+  return { review: exposeReview(getReviewOrThrow(id)), uploadUrl: `/api/session-logs/${sessionLogId}/video/upload` };
 }
 
 export async function saveSessionVideoUpload(
-  id: number,
+  sessionLogId: number,
   body: ReadableStream<Uint8Array> | null,
   actor: string,
 ): Promise<VideoReview> {
-  const review = getReviewOrThrow(id);
+  const review = getVideoReviewForSessionLog(sessionLogId);
+  if (!review) throw new HttpError(404, `No video upload was started for session log ${sessionLogId}`);
   if (review.status !== "uploading") throw new HttpError(409, "This video has already been uploaded.");
   const written = await writeVideoUpload(review.storagePath, body, review.sizeBytes);
   getDb().transaction(() => {
-    setVideoReviewStatus(id, "uploaded");
+    setVideoReviewStatus(review.id, "uploaded");
     logAudit({
       actor,
-      action: "video_review.uploaded",
-      entityType: "video_review",
-      entityId: id,
+      action: "session_video.uploaded",
+      entityType: "session_log",
+      entityId: review.sessionLogId,
       details: { sizeBytes: written, storage: "local" },
     });
   })();
-  return exposeReview(getReviewOrThrow(id));
+  return exposeReview(getReviewOrThrow(review.id));
 }
 
 export async function processSessionVideo(id: number, actor: string): Promise<VideoReview> {
@@ -102,7 +108,7 @@ export async function processSessionVideo(id: number, actor: string): Promise<Vi
   await assertLocalVideo(review.storagePath, review.sizeBytes);
   getDb().transaction(() => {
     setVideoReviewStatus(id, "processing");
-    logAudit({ actor, action: "video_review.processing", entityType: "video_review", entityId: id });
+    logAudit({ actor, action: "session_video.processing", entityType: "session_log", entityId: review.sessionLogId });
   })();
 
   try {
@@ -111,9 +117,9 @@ export async function processSessionVideo(id: number, actor: string): Promise<Vi
       completeVideoReview(id, analysis.summary, analysis.clips);
       logAudit({
         actor,
-        action: "video_review.completed",
-        entityType: "video_review",
-        entityId: id,
+        action: "session_video.completed",
+        entityType: "session_log",
+        entityId: review.sessionLogId,
         details: { clips: analysis.clips.length, provider: "openai" },
       });
     })();
@@ -124,9 +130,9 @@ export async function processSessionVideo(id: number, actor: string): Promise<Vi
       setVideoReviewStatus(id, "failed", message.slice(0, 1_000));
       logAudit({
         actor,
-        action: "video_review.failed",
-        entityType: "video_review",
-        entityId: id,
+        action: "session_video.failed",
+        entityType: "session_log",
+        entityId: review.sessionLogId,
         details: { message: message.slice(0, 500), provider: "openai" },
       });
     })();
@@ -134,11 +140,32 @@ export async function processSessionVideo(id: number, actor: string): Promise<Vi
   }
 }
 
+export async function processSessionLogVideo(sessionLogId: number, actor: string): Promise<VideoReview> {
+  const review = getVideoReviewForSessionLog(sessionLogId);
+  if (!review) throw new HttpError(404, `No video is attached to session log ${sessionLogId}`);
+  return processSessionVideo(review.id, actor);
+}
+
+/** Process the most recent earlier recording when an approved plan assigns a new therapist. */
+export async function processPreviousVideoForTakeover(
+  studentId: number,
+  date: string,
+  slot: "AM" | "PM",
+  actor: string,
+): Promise<VideoReview | null> {
+  const review = getLatestVideoForStudent(studentId, date, slot);
+  if (!review || review.status === "uploading" || review.status === "processing" || review.status === "completed") {
+    return review ? exposeReview(review) : null;
+  }
+  return processSessionVideo(review.id, actor);
+}
+
 export async function getSessionVideoMedia(
-  id: number,
+  sessionLogId: number,
   clipId?: number,
 ): Promise<{ path: string; contentType: string; size: number }> {
-  const review = getReviewOrThrow(id);
+  const review = getVideoReviewForSessionLog(sessionLogId);
+  if (!review) throw new HttpError(404, `No video is attached to session log ${sessionLogId}`);
   const relativePath =
     clipId === undefined
       ? review.storagePath
@@ -151,4 +178,11 @@ export async function getSessionVideoMedia(
     contentType: clipId === undefined ? review.contentType : "video/mp4",
     size: details.size,
   };
+}
+
+/** Remove local media after its owning session log has been deleted. */
+export async function removeSessionVideoFiles(review: StoredVideoReview | null): Promise<void> {
+  if (!review) return;
+  const paths = [review.storagePath, ...review.clips.map((clip) => clip.storagePath)];
+  await Promise.all(paths.map((relativePath) => rm(resolveVideoStoragePath(relativePath), { force: true }).catch(() => undefined)));
 }

@@ -2,7 +2,7 @@ import type { PlanAssignment, SessionLog, Student } from "@/lib/types";
 
 // The outbox displays these messages; the bot sends the equivalent approved Meta templates.
 
-// Set CENTRE_PHONE in .env.local; the placeholder makes a missing value obvious in the outbox.
+// Set CENTRE_PHONE in .env; the placeholder makes a missing value obvious in the outbox.
 export const CENTRE_PHONE = process.env.CENTRE_PHONE || "[centre phone]";
 
 const t12 = (hhmm: string) => {
@@ -48,12 +48,25 @@ export function therapistCoverMessage(a: PlanAssignment, date: string, previous:
       `Last session: ${previous.date} ${previous.slot} with ${previous.therapistName} (${previous.attendance}).`,
       previous.summary ? `Summary: ${previous.summary}` : "No summary recorded.",
       previous.goals ? `Goals: ${previous.goals}` : "",
+      previous.videoReview?.summary ? `Video gist: ${previous.videoReview.summary}` : "",
+      previous.videoReview?.clips.length
+        ? `Video highlights: ${previous.videoReview.clips.map((clip) => `${clip.title} (${videoTimestamp(clip.startSeconds)})`).join(", ")}`
+        : "",
       "The full handover is available in the staff portal.",
     );
   } else {
     lines.push("", "No previous session log on record for this child.");
   }
   return lines.filter((l, i, all) => l !== "" || all[i - 1] !== "").join("\n");
+}
+
+function videoTimestamp(seconds: number) {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainder = Math.floor(seconds % 60);
+  return hours > 0
+    ? `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`
+    : `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
 }
 
 export const therapistConfirmedMessage = (a: PlanAssignment, date: string) =>
