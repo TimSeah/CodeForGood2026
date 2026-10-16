@@ -15,19 +15,19 @@ export function MonthlyAllocation({ month }: { month: string }) {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[860px] border-collapse text-left text-sm">
               <thead>
-                <tr className="bg-slate-50 text-xs text-slate-600">
-                  <th rowSpan={2} className="border border-slate-200 px-2 py-1">No.</th>
-                  <th rowSpan={2} className="border border-slate-200 px-2 py-1">Therapist</th>
-                  <th rowSpan={2} className="border border-slate-200 px-2 py-1">Seniority</th>
-                  <th rowSpan={2} className="border border-slate-200 px-2 py-1">Location</th>
-                  <th colSpan={2} className="border border-slate-200 px-2 py-1 text-center">Mon · Wed · Fri</th>
-                  <th colSpan={2} className="border border-slate-200 px-2 py-1 text-center">Tue · Thu</th>
+                <tr className="bg-subtle text-xs text-ink-soft">
+                  <th rowSpan={2} className="border border-line px-2.5 py-1.5">No.</th>
+                  <th rowSpan={2} className="border border-line px-2.5 py-1.5">Therapist</th>
+                  <th rowSpan={2} className="border border-line px-2.5 py-1.5">Seniority</th>
+                  <th rowSpan={2} className="border border-line px-2.5 py-1.5">Location</th>
+                  <th colSpan={2} className="border border-line px-2.5 py-1.5 text-center">Mon · Wed · Fri</th>
+                  <th colSpan={2} className="border border-line px-2.5 py-1.5 text-center">Tue · Thu</th>
                 </tr>
-                <tr className="bg-slate-50 text-xs text-slate-600">
-                  <th className="border border-slate-200 px-2 py-1">Time</th>
-                  <th className="border border-slate-200 px-2 py-1">Student</th>
-                  <th className="border border-slate-200 px-2 py-1">Time</th>
-                  <th className="border border-slate-200 px-2 py-1">Student</th>
+                <tr className="bg-subtle text-xs text-ink-soft">
+                  <th className="border border-line px-2.5 py-1.5">Time</th>
+                  <th className="border border-line px-2.5 py-1.5">Student</th>
+                  <th className="border border-line px-2.5 py-1.5">Time</th>
+                  <th className="border border-line px-2.5 py-1.5">Student</th>
                 </tr>
               </thead>
               <tbody>
@@ -45,12 +45,12 @@ export function MonthlyAllocation({ month }: { month: string }) {
 
 function Legend() {
   return (
-    <div className="mb-3 flex flex-wrap gap-3 text-xs text-slate-600">
+    <div className="mb-4 flex flex-wrap gap-4 text-xs text-ink-soft">
       <span className="flex items-center gap-1">
-        <span className="inline-block h-3 w-3 rounded-sm bg-emerald-100" /> Available (no child)
+        <span className="inline-block h-3 w-3 rounded-sm bg-good-bg" /> Available (no child)
       </span>
       <span className="flex items-center gap-1">
-        <span className="inline-block h-3 w-3 rounded-sm bg-slate-200" /> Not working
+        <span className="inline-block h-3 w-3 rounded-sm bg-sunk" /> Not working
       </span>
       <span>Standard times 8:30–12:00 · 2:00–5:30; others shown in amber</span>
     </div>
@@ -63,20 +63,20 @@ function TherapistRows({ row, no }: { row: MonthlyPatternRow; no: number }) {
   return (
     <>
       {(["AM", "PM"] as const).map((slot) => (
-        <tr key={slot} className={slot === "PM" ? "border-b-2 border-slate-300" : ""}>
+        <tr key={slot} className={slot === "PM" ? "border-b-2 border-field" : ""}>
           {slot === "AM" && (
             <>
-              <td rowSpan={2} className="border border-slate-200 px-2 py-1 text-slate-500">
+              <td rowSpan={2} className="border border-line px-2.5 py-1.5 text-muted">
                 {no}
               </td>
-              <td rowSpan={2} className="border border-slate-200 px-2 py-1 font-medium">
+              <td rowSpan={2} className="border border-line px-2.5 py-1.5 font-medium">
                 {row.therapistName}
-                {row.isPartTime && <span className="ml-1 text-xs text-slate-500">(PT)</span>}
+                {row.isPartTime && <span className="ml-1 text-xs text-muted">(PT)</span>}
               </td>
-              <td rowSpan={2} className="border border-slate-200 px-2 py-1" title={RANK_LABEL[row.rank]}>
+              <td rowSpan={2} className="border border-line px-2.5 py-1.5" title={RANK_LABEL[row.rank]}>
                 <Badge tone={isSeniorRank(row.rank) ? "info" : "neutral"}>{row.rank}</Badge>
               </td>
-              <td rowSpan={2} className="border border-slate-200 px-2 py-1 text-slate-600">
+              <td rowSpan={2} className="border border-line px-2.5 py-1.5 text-ink-soft">
                 {row.homeArea ?? "—"}
               </td>
             </>
@@ -90,10 +90,10 @@ function TherapistRows({ row, no }: { row: MonthlyPatternRow; no: number }) {
 }
 
 function Cells({ cells, slot }: { cells: PatternCell[]; slot: Slot }) {
-  const cls = "border border-slate-200 px-2 py-1";
+  const cls = "border border-line px-2.5 py-1.5";
   if (cells.some((c) => c.off)) {
     return (
-      <td colSpan={2} className={`${cls} bg-slate-200 text-center text-xs text-slate-500`}>
+      <td colSpan={2} className={`${cls} bg-sunk text-center text-xs text-muted`}>
         Not working
       </td>
     );
@@ -101,10 +101,10 @@ function Cells({ cells, slot }: { cells: PatternCell[]; slot: Slot }) {
   if (cells.length === 0) {
     return (
       <>
-        <td className={`${cls} bg-emerald-50 text-xs text-slate-500`}>
+        <td className={`${cls} bg-good-bg/60 text-xs text-muted`}>
           {formatTime(STANDARD[slot][0])} – {formatTime(STANDARD[slot][1])}
         </td>
-        <td className={`${cls} bg-emerald-50 text-xs text-emerald-700`}>Available</td>
+        <td className={`${cls} bg-good-bg/60 text-xs text-good`}>Available</td>
       </>
     );
   }
@@ -112,12 +112,12 @@ function Cells({ cells, slot }: { cells: PatternCell[]; slot: Slot }) {
   const nonStandard = c.startTime !== STANDARD[slot][0] || c.endTime !== STANDARD[slot][1];
   return (
     <>
-      <td className={`${cls} whitespace-nowrap text-xs ${nonStandard ? "bg-amber-50 text-amber-800" : "text-slate-600"}`}>
+      <td className={`${cls} whitespace-nowrap text-xs ${nonStandard ? "bg-warn-bg text-warn" : "text-ink-soft"}`}>
         {c.startTime && c.endTime ? `${formatTime(c.startTime)} – ${formatTime(c.endTime)}` : "—"}
       </td>
       <td className={cls}>
         {cells.map((x) => x.studentName).join(" / ")}
-        {c.location !== "clinic" && <span className="ml-1 text-xs capitalize text-slate-500">({c.location})</span>}
+        {c.location !== "clinic" && <span className="ml-1 text-xs capitalize text-muted">({c.location})</span>}
       </td>
     </>
   );

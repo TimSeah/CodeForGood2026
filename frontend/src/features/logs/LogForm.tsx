@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Attendance, SessionLog, Slot } from "@/api/types";
-import { Button, inputClass } from "@/components/ui";
+import { Button, Field, inputClass } from "@/components/ui";
 import { useStudents, useTherapists } from "@/features/reference/api";
 import { type SessionLogInput, useCreateLog, useUpdateLog } from "./api";
 
@@ -52,61 +52,71 @@ export function LogForm({
   };
 
   return (
-    <form onSubmit={submit} className="space-y-3 text-sm">
+    <form onSubmit={submit} className="flex flex-col gap-4 text-sm">
       {!fixed && (
-        <div className="flex flex-wrap gap-2">
-          <input type="date" required className={inputClass} value={form.date} onChange={(e) => set("date", e.target.value)} aria-label="Date" />
-          <select className={inputClass} value={form.slot} onChange={(e) => set("slot", e.target.value as Slot)} aria-label="Slot">
-            <option value="AM">AM</option>
-            <option value="PM">PM</option>
-          </select>
-          <select required className={inputClass} value={form.therapistId || ""} onChange={(e) => set("therapistId", Number(e.target.value))} aria-label="Therapist">
-            <option value="">Therapist…</option>
-            {therapists.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-          <select required className={inputClass} value={form.studentId || ""} onChange={(e) => set("studentId", Number(e.target.value))} aria-label="Child">
-            <option value="">Child…</option>
-            {students.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Date">
+            <input type="date" required className={inputClass} value={form.date} onChange={(e) => set("date", e.target.value)} />
+          </Field>
+          <Field label="Slot">
+            <select className={inputClass} value={form.slot} onChange={(e) => set("slot", e.target.value as Slot)}>
+              <option value="AM">AM</option>
+              <option value="PM">PM</option>
+            </select>
+          </Field>
+          <Field label="Therapist">
+            <select required className={inputClass} value={form.therapistId || ""} onChange={(e) => set("therapistId", Number(e.target.value))}>
+              <option value="">Choose…</option>
+              {therapists.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Child">
+            <select required className={inputClass} value={form.studentId || ""} onChange={(e) => set("studentId", Number(e.target.value))}>
+              <option value="">Choose…</option>
+              {students.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </Field>
         </div>
       )}
-      <fieldset className="flex flex-wrap gap-3">
-        <legend className="mb-1 font-medium">Attendance</legend>
-        {ATTENDANCE.map((a) => (
-          <label key={a} className="flex items-center gap-1 capitalize">
-            <input type="radio" name="attendance" checked={form.attendance === a} onChange={() => set("attendance", a)} /> {a}
-          </label>
-        ))}
+      <fieldset className="flex flex-col gap-1.5">
+        <legend className="mb-1.5 text-[13px] font-semibold text-ink-soft">Attendance</legend>
+        <div className="inline-flex flex-wrap gap-0.5 self-start rounded-[10px] bg-sunk p-[3px]">
+          {ATTENDANCE.map((a) => (
+            <label
+              key={a}
+              className="flex min-h-[34px] cursor-pointer items-center rounded-lg px-3 text-[13px] font-semibold text-ink-soft capitalize has-checked:bg-white has-checked:text-ink has-checked:shadow-sm has-focus-visible:outline-2 has-focus-visible:outline-brand"
+            >
+              <input type="radio" name="attendance" className="sr-only" checked={form.attendance === a} onChange={() => set("attendance", a)} />
+              {a}
+            </label>
+          ))}
+        </div>
       </fieldset>
-      <label className="block">
-        <span className="font-medium">Summary</span>{" "}
-        <span className="text-xs text-slate-500">— shared with a substitute therapist if this child's next session is covered</span>
-        <textarea aria-label="Summary" className={`${inputClass} mt-1 w-full`} rows={2} value={form.summary} onChange={(e) => set("summary", e.target.value)} />
-      </label>
-      <label className="block">
-        <span className="font-medium">Goals / programmes worked on</span>
-        <input aria-label="Goals" className={`${inputClass} mt-1 w-full`} value={form.goals} onChange={(e) => set("goals", e.target.value)} />
-      </label>
-      <label className="block">
-        <span className="font-medium">Notes</span> <span className="text-xs text-slate-500">— clinical notes; included in the session PDF</span>
-        <textarea aria-label="Notes" className={`${inputClass} mt-1 w-full`} rows={3} value={form.notes} onChange={(e) => set("notes", e.target.value)} />
-      </label>
-      <div className="flex items-center gap-2">
+      <Field label="Summary" hint="shared with a substitute therapist if this child's next session is covered">
+        <textarea className={`${inputClass} py-2.5`} rows={2} value={form.summary} onChange={(e) => set("summary", e.target.value)} />
+      </Field>
+      <Field label="Goals / programmes worked on">
+        <input className={inputClass} value={form.goals} onChange={(e) => set("goals", e.target.value)} />
+      </Field>
+      <Field label="Notes" hint="clinical notes; included in the session PDF">
+        <textarea className={`${inputClass} py-2.5`} rows={3} value={form.notes} onChange={(e) => set("notes", e.target.value)} />
+      </Field>
+      <div className="flex flex-wrap items-center gap-2">
         <Button type="submit" disabled={mutation.isPending}>
           {existing ? "Save changes" : "Save log"}
         </Button>
         <Button type="button" variant="secondary" onClick={onDone}>
           Cancel
         </Button>
-        {mutation.error && <span className="text-rose-600">{mutation.error.message}</span>}
+        {mutation.error && <span className="font-semibold text-bad">{mutation.error.message}</span>}
       </div>
     </form>
   );
