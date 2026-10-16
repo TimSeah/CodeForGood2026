@@ -19,12 +19,13 @@ if (missingDependencies.length > 0) {
   process.exit(1);
 }
 
-const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+const npmCommand = process.platform === "win32" ? (process.env.ComSpec ?? "cmd.exe") : "npm";
+const npmArguments = process.platform === "win32" ? ["/d", "/s", "/c", "npm run dev"] : ["run", "dev"];
 let stopping = false;
 
 for (const service of services) {
   console.log(`Starting ${service.name} at ${service.url}`);
-  service.process = spawn(npmCommand, ["run", "dev"], {
+  service.process = spawn(npmCommand, npmArguments, {
     cwd: service.directory,
     stdio: "inherit",
   });
