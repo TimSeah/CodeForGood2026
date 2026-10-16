@@ -5,7 +5,17 @@ import type { QueryClient } from "@tanstack/react-query";
  * plans are regenerated, sessions change, messages are queued. Refetch all day-scoped data.
  */
 export function invalidateDayData(qc: QueryClient) {
-  for (const key of ["plans", "sessions", "absences", "bot-reports", "notifications", "audit", "person-month", "preferences"]) {
+  for (const key of [
+    "plans",
+    "sessions",
+    "confirmed-sessions",
+    "absences",
+    "bot-reports",
+    "notifications",
+    "audit",
+    "person-month",
+    "preferences",
+  ]) {
     qc.invalidateQueries({ queryKey: [key] });
   }
 }

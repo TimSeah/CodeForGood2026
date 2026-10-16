@@ -37,6 +37,7 @@ Current features (see `docs/plans/rescheduling.md` for the workflow behind them)
 | `approval` | `/approval`, `/replies` | Draft plan (+ swap alternative), editing with validation + change reasons, approve dialog, calendars · parent replies + outbox |
 | `preferences` | `/preferences` | Scheduling rules: suggestions to confirm/reject (also on the Approval page via `SuggestionsPanel`), active/paused rules, edit/pause/remove, add rule |
 | `schedule` | `/schedule` | Monthly MWF/TT allocation table + daily view |
+| `calendar` | `/calendar` | Confirmed centre-wide month calendar with therapist / child filters |
 | `logs` | `/logs` | Therapist portal: today's sessions, attendance + session log CRUD, PDF |
 | `audit` | `/audit` | Audit trail |
 | `reference` | — | Therapist / student lookups used everywhere |
