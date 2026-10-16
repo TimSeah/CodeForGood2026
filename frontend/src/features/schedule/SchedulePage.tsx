@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { DateInput, Tabs } from "@/components/ui";
+import { DateInput, PageHeader, Tabs } from "@/components/ui";
 import { useSelectedDate } from "@/hooks/useSelectedDate";
 import { DailySchedule } from "./DailySchedule";
 import { MonthlyAllocation } from "./MonthlyAllocation";
@@ -10,21 +10,25 @@ export function SchedulePage() {
   const [view, setView] = useState<"monthly" | "daily">("monthly");
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold">Schedule</h1>
-        <div className="flex flex-wrap items-center gap-2">
-          <Tabs
-            value={view}
-            onChange={setView}
-            tabs={[
-              { value: "monthly", label: "Monthly (MWF / TT)" },
-              { value: "daily", label: "Daily" },
-            ]}
-          />
-          <DateInput value={date} onChange={setDate} />
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow={view === "monthly" ? "Recurring allocation" : "The day as it stands"}
+        title="Schedule"
+        actions={
+          <>
+            <Tabs
+              label="View"
+              value={view}
+              onChange={setView}
+              tabs={[
+                { value: "monthly", label: "Monthly (MWF / TT)" },
+                { value: "daily", label: "Daily" },
+              ]}
+            />
+            <DateInput value={date} onChange={setDate} />
+          </>
+        }
+      />
       {view === "monthly" ? <MonthlyAllocation month={date.slice(0, 7)} /> : <DailySchedule date={date} />}
     </div>
   );

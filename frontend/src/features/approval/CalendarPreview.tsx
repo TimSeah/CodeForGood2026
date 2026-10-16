@@ -19,7 +19,8 @@ export function CalendarPreview({ plan }: { plan: Plan }) {
 
   return (
     <Card
-      title="Tentative calendars"
+      title="Tentative calendar"
+      subtitle="What each affected person’s month will look like under this plan."
       actions={
         <select className={inputClass} value={key} onChange={(e) => setKey(e.target.value)} aria-label="Whose calendar">
           {(["therapist", "student"] as const).map((kind) => (
@@ -38,10 +39,24 @@ export function CalendarPreview({ plan }: { plan: Plan }) {
     >
       <QueryState isLoading={isLoading} error={error} />
       {person && !isLoading && <MonthCalendar month={month} entriesByDate={entries} highlightDate={plan.date} />}
-      <p className="mt-2 text-xs text-slate-500">
-        Blue = new under this plan · struck through = moved away · red = cancelled. This is the calendar each person will get.
-      </p>
+      <div className="mt-4 flex flex-wrap gap-4 text-[13px] text-ink-soft">
+        <LegendItem swatch="border border-info bg-info-bg">New under this plan</LegendItem>
+        <LegendItem swatch="bg-sunk">Usual session</LegendItem>
+        <LegendItem swatch="bg-white border border-field">
+          <span className="line-through">Moved away</span>
+        </LegendItem>
+        <LegendItem swatch="bg-bad-bg">Cancelled</LegendItem>
+      </div>
     </Card>
+  );
+}
+
+function LegendItem({ swatch, children }: { swatch: string; children: React.ReactNode }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className={`size-3 rounded-[3px] ${swatch}`} aria-hidden="true" />
+      {children}
+    </span>
   );
 }
 

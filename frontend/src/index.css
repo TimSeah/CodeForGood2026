@@ -1,5 +1,33 @@
 @import "tailwindcss";
 
+/* Design tokens (see the "Rescheduling UI Revamp" canvas). Use them as bg-brand, text-muted, border-line, … */
+@theme {
+  --font-sans: "Figtree", ui-sans-serif, system-ui, sans-serif;
+
+  --color-paper: #f6f5f1; /* page background */
+  --color-subtle: #faf9f6; /* table headers, footers */
+  --color-sunk: #efeee9; /* neutral fills, segmented controls */
+  --color-line: #e3e1d9; /* borders */
+  --color-line-soft: #efeee9; /* dividers inside cards */
+  --color-field: #d6d3c9; /* input borders */
+  --color-ink: #1b2422;
+  --color-ink-soft: #3f4744;
+  --color-muted: #5c6662;
+
+  --color-brand: #0e5e59;
+  --color-brand-hover: #0a4441;
+  --color-brand-soft: #e1efec;
+
+  --color-good: #1d6638;
+  --color-good-bg: #dff0e3;
+  --color-warn: #8a4a00;
+  --color-warn-bg: #fcefd6;
+  --color-bad: #a12a1d;
+  --color-bad-bg: #fae3df;
+  --color-info: #1f4c86;
+  --color-info-bg: #e3ecf8;
+}
+
 body {
-  @apply bg-slate-50 text-slate-900 antialiased;
+  @apply bg-paper font-sans text-ink antialiased;
 }

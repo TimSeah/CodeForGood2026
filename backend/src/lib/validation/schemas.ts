@@ -49,7 +49,18 @@ export const resolveReportBody = z.union([
 ]);
 
 // ---- plans ----
-export const generatePlanBody = z.object({ date: isoDate, actor });
+export const generatePlanBody = z
+  .object({
+    date: isoDate,
+    mode: z.enum(["rules", "agent"]).default("rules"),
+    prompt: z.string().trim().max(2000).optional(),
+    actor,
+  })
+  .superRefine((body, ctx) => {
+    if (body.mode === "agent" && !body.prompt) {
+      ctx.addIssue({ code: "custom", path: ["prompt"], message: "A prompt is required in AI agent mode" });
+    }
+  });
 export const approvePlanBody = z.object({ notifyMode: z.enum(["whatsapp", "manual"]), actor });
 export const actorBody = z.object({ actor });
 export const editAssignmentBody = z.object({ toTherapistId: z.number().int().positive().nullable(), actor });
@@ -98,6 +109,15 @@ export const sessionLogQuery = z.object({
   studentId: id.optional(),
   therapistId: id.optional(),
 });
+
+// ---- session video review ----
+export const createVideoReviewBody = z.object({
+  fileName: z.string().trim().min(1).max(255),
+  contentType: z.enum(["video/mp4", "video/webm", "video/quicktime", "video/x-matroska"]),
+  sizeBytes: z.number().int().positive().max(1_073_741_824, "Video must be 1 GB or smaller"),
+  actor,
+});
+export const processVideoReviewBody = z.object({ actor });
 
 export const monthQuery = z.object({ month: isoMonth });
 export const auditQuery = z.object({ limit: z.coerce.number().int().min(1).max(500).default(100) });
