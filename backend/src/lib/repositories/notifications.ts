@@ -12,6 +12,10 @@ interface NotificationRow {
   attachment: string | null;
   status: Notification["status"];
   plan_assignment_id: number | null;
+  template_vars: string;
+  message_id: string | null;
+  delivery_status: Notification["deliveryStatus"];
+  delivery_error: string | null;
   created_at: string;
 }
 
@@ -26,14 +30,18 @@ const toNotification = (r: NotificationRow): Notification => ({
   attachment: r.attachment,
   status: r.status,
   planAssignmentId: r.plan_assignment_id,
+  variables: JSON.parse(r.template_vars) as string[],
+  messageId: r.message_id,
+  deliveryStatus: r.delivery_status,
+  deliveryError: r.delivery_error,
   createdAt: r.created_at,
 });
 
 export function createNotification(input: Omit<Notification, "id" | "createdAt" | "recipientName">): number {
   const r = getDb()
     .prepare(
-      `INSERT INTO notifications (recipient_type, recipient_id, to_phone, purpose, body, attachment, status, plan_assignment_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO notifications (recipient_type, recipient_id, to_phone, purpose, body, attachment, status, plan_assignment_id, template_vars, delivery_status, delivery_error)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       input.recipientType,
@@ -44,8 +52,34 @@ export function createNotification(input: Omit<Notification, "id" | "createdAt" 
       input.attachment,
       input.status,
       input.planAssignmentId,
+      JSON.stringify(input.variables),
+      input.deliveryStatus,
+      input.deliveryError,
     );
   return Number(r.lastInsertRowid);
+}
+
+export function getNotification(id: number): Notification | null {
+  const row = getDb().prepare("SELECT * FROM notifications WHERE id = ?").get(id) as NotificationRow | undefined;
+  return row ? toNotification(row) : null;
+}
+
+export function pendingNotifications(): Notification[] {
+  return (getDb().prepare("SELECT * FROM notifications WHERE status = 'pending' ORDER BY id LIMIT 50").all() as NotificationRow[])
+    .map(toNotification);
+}
+
+export function updateNotificationDelivery(id: number, status: "sent" | "delivered" | "read" | "failed", messageId: string | null, error: string | null): "missing" | "unchanged" | "changed" {
+  const current = getNotification(id);
+  if (!current || (current.messageId && messageId && current.messageId !== messageId)) return "missing";
+  const rank: Record<string, number> = { pending: 0, sent: 1, delivered: 2, read: 3, failed: 4 };
+  if (current.deliveryStatus && rank[current.deliveryStatus] >= rank[status]) return "unchanged";
+  if (current.status === "failed" || (status === "failed" && (current.deliveryStatus === "delivered" || current.deliveryStatus === "read"))) return "unchanged";
+  getDb().prepare(
+    `UPDATE notifications SET status = ?, delivery_status = ?, message_id = COALESCE(message_id, ?), delivery_error = ?
+     WHERE id = ?`,
+  ).run(status === "failed" ? "failed" : "sent", status, messageId, error, id);
+  return "changed";
 }
 
 /** Messages about changes to sessions on `date`, newest first. */

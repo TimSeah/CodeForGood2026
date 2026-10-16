@@ -1,7 +1,6 @@
 import type { PlanAssignment, SessionLog, Student } from "@/lib/types";
 
-// Message text. Keep it short and warm — families want "just a text" (docs/challenge_notes.md).
-// Placeholders until the team agrees on wording (and the matching Meta templates are approved).
+// The outbox displays these messages; the bot sends the equivalent approved Meta templates.
 
 // Set CENTRE_PHONE in .env.local; the placeholder makes a missing value obvious in the outbox.
 export const CENTRE_PHONE = process.env.CENTRE_PHONE || "[centre phone]";
@@ -19,7 +18,7 @@ export function parentConfirmMessage(a: PlanAssignment, date: string, student: S
     `Hi ${student.guardianName ?? "there"}, this is Autism Partnership.`,
     `${a.fromTherapistName} is unable to make ${student.name}'s session on ${sessionWhen(a, date)}.`,
     `${a.toTherapistName} will take the session instead${a.step === "team" ? " (already part of " + student.name + "'s team)" : ""}.`,
-    `Please reply YES to confirm or NO if you're not comfortable by ${t12(deadline)}. If we don't hear back by then, we'll cancel the session.`,
+    `Please reply YES ${a.id} to confirm or NO ${a.id} if you'd prefer a call by ${t12(deadline)}. If we don't hear back by then, we'll cancel the session.`,
   ].join("\n");
 }
 
@@ -49,7 +48,7 @@ export function therapistCoverMessage(a: PlanAssignment, date: string, previous:
       `Last session: ${previous.date} ${previous.slot} with ${previous.therapistName} (${previous.attendance}).`,
       previous.summary ? `Summary: ${previous.summary}` : "No summary recorded.",
       previous.goals ? `Goals: ${previous.goals}` : "",
-      "The full log of that session is attached as a PDF.",
+      "The full handover is available in the staff portal.",
     );
   } else {
     lines.push("", "No previous session log on record for this child.");

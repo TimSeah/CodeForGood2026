@@ -41,24 +41,36 @@ export function incoming(payload) {
   return messages;
 }
 
-export function createWhatsAppClient({ token, phoneNumberId, version = 'v23.0', fetcher = fetch }) {
+export function createWhatsAppClient({ token, phoneNumberId, version = 'v25.0', fetcher = fetch }) {
   if (!token || !phoneNumberId || !/^v\d+\.\d+$/.test(version)) throw new Error('Set a WhatsApp token, phone number ID and valid Graph API version.');
   const base = `https://graph.facebook.com/${version}`;
   const headers = { Authorization: `Bearer ${token}` };
 
   async function json(url, options) {
     const response = await fetcher(url, options);
-    if (!response.ok) throw new Error(`WhatsApp API returned HTTP ${response.status}`);
-    return response.json();
+    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(`WhatsApp API returned HTTP ${response.status}, code ${result.error?.code ?? 'unknown'}: ${String(result.error?.message ?? 'request rejected').slice(0, 200)}`);
+    }
+    return result;
   }
 
   return {
     async send(message) {
-      await json(`${base}/${phoneNumberId}/messages`, {
+      const result = await json(`${base}/${phoneNumberId}/messages`, {
         method: 'POST',
         headers: { ...headers, 'Content-Type': 'application/json' },
         body: JSON.stringify({ messaging_product: 'whatsapp', ...message }),
       });
+      return result.messages?.[0]?.id;
+    },
+    async uploadDocument(data) {
+      const form = new FormData();
+      form.set('messaging_product', 'whatsapp');
+      form.set('file', new Blob([data], { type: 'application/pdf' }), 'session-handover.pdf');
+      const result = await json(`${base}/${phoneNumberId}/media`, { method: 'POST', headers, body: form });
+      if (!result.id) throw new Error('WhatsApp media upload returned no ID');
+      return result.id;
     },
     async media(id) {
       const info = await json(`${base}/${encodeURIComponent(id)}`, { headers });

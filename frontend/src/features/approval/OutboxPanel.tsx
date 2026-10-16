@@ -12,15 +12,14 @@ const PURPOSE: Record<string, { label: string; tone: "info" | "brand" | "neutral
   therapist_stand_down: { label: "Therapist: stand down", tone: "neutral" },
 };
 
-/** Messages queued for WhatsApp. Until the bot can send, they stay here with status "placeholder". */
+/** Messages queued for WhatsApp, with Meta delivery receipts when available. */
 export function OutboxPanel({ date }: { date: string }) {
   const { data = [], isLoading, error } = useNotifications(date);
   return (
     <Card
       title="WhatsApp outbox"
       count={data.length}
-      subtitle="Not sent: the WhatsApp bot can’t send messages yet. These go out once it’s connected."
-      actions={<Badge tone="warning">Not sent yet</Badge>}
+      subtitle="Delivery requires an open WhatsApp conversation or an approved template. Failed messages need staff follow-up."
       flush
     >
       <div className="bg-[#EFEDE6] px-5 py-4">
@@ -28,17 +27,21 @@ export function OutboxPanel({ date }: { date: string }) {
         <ul className="space-y-4">
           {data.map((n) => {
             const purpose = PURPOSE[n.purpose] ?? { label: n.purpose, tone: "neutral" as const };
+            const status = n.deliveryStatus ?? n.status;
             return (
               <li key={n.id} className="flex flex-col gap-1.5">
                 <div className="flex flex-wrap items-center gap-2 text-[13px]">
                   <strong>{n.recipientName ?? n.recipientType}</strong>
                   <span className="text-muted">{maskPhone(n.toPhone)}</span>
                   <Badge tone={purpose.tone}>{purpose.label}</Badge>
-                  <Badge tone="warning">{n.status}</Badge>
+                  <Badge tone={status === "failed" ? "danger" : status === "placeholder" ? "warning" : status === "sent" || status === "delivered" || status === "read" ? "success" : "info"}>
+                    {status}
+                  </Badge>
                   <span className="ml-auto text-muted">{formatTimestamp(n.createdAt)}</span>
                 </div>
                 <div className="max-w-[640px] self-start rounded-[4px_14px_14px_14px] bg-white px-3.5 py-3 text-sm leading-relaxed shadow-sm">
                   <p className="whitespace-pre-wrap">{n.body}</p>
+                  {n.deliveryError && <p className="mt-2 text-xs text-rose-700">{n.deliveryError}</p>}
                   {n.attachment && (
                     <a
                       href={n.attachment}

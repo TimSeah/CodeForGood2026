@@ -40,6 +40,10 @@ export function getStudent(id: number): Student | null {
   return row ? toStudent(row) : null;
 }
 
+export function setGuardianPhone(id: number, phone: string | null): boolean {
+  return getDb().prepare("UPDATE students SET guardian_phone = ? WHERE id = ?").run(phone, id).changes === 1;
+}
+
 /**
  * studentId → therapists who worked with the child before `beforeDate` without being the regular therapist:
  * anyone who logged a session with them, plus anyone a past session was reassigned to.

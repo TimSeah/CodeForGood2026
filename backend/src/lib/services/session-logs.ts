@@ -58,7 +58,7 @@ export function removeSessionLog(id: number, actor: string) {
 }
 
 /** A one-session PDF for the substitute therapist. Contains ONLY this log — no other portal data. */
-export async function renderSessionLogPdf(log: SessionLog): Promise<Uint8Array> {
+export async function renderSessionLogPdf(log: SessionLog, shareableOnly = false): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
   pdf.setTitle(`Session log - ${log.studentName} - ${log.date}`);
   let page = pdf.addPage([595, 842]); // A4
@@ -110,6 +110,6 @@ export async function renderSessionLogPdf(log: SessionLog): Promise<Uint8Array> 
   section("Attendance", log.attendance);
   section("Summary", log.summary);
   section("Goals / programmes worked on", log.goals);
-  section("Notes", log.notes);
+  if (!shareableOnly) section("Notes", log.notes);
   return pdf.save();
 }
