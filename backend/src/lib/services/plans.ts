@@ -3,11 +3,15 @@ import { getDb } from "@/lib/db/client";
 import { HttpError } from "@/lib/http";
 import { logAudit } from "@/lib/repositories/audit";
 import {
+  type AssignmentSnapshot,
   createAssignment,
   createPlan,
+  getAssignmentHistory,
   getPlan,
   listPlansByDate,
+  setAssignmentState,
   setPlanStatus,
+  setRejectedTherapists,
   supersedeDrafts,
   updateAssignmentTarget,
 } from "@/lib/repositories/plans";
@@ -56,11 +60,21 @@ function insertAssignments(planId: number, proposals: ProposedAssignment[]) {
  */
 export function generatePlanForDate(date: string, actor: string): Plan | null {
   const ctx = loadDayContext(date);
-  const { primary, swapAlternative } = proposeReallocations(ctx);
-
-  const previousEdits = listPlansByDate(date)
+  const previousRows = listPlansByDate(date)
     .filter((p) => p.status === "draft" && p.kind !== "swap_alternative")
-    .flatMap((p) => p.assignments.filter((a) => a.editedByAdmin));
+    .flatMap((p) => p.assignments);
+  const previousEdits = previousRows.filter((a) => a.editedByAdmin);
+
+  // Therapists the admin rejected for a row stay rejected in the new draft (treated like exclusions).
+  const rejections = new Map<number, number[]>();
+  for (const a of previousRows) {
+    if (a.rejectedTherapistIds.length) rejections.set(a.sessionId, a.rejectedTherapistIds);
+  }
+  const exclusions = new Map([...ctx.exclusions].map(([k, v]) => [k, new Set(v)]));
+  for (const [sessionId, ids] of rejections) {
+    exclusions.set(sessionId, new Set([...(exclusions.get(sessionId) ?? []), ...ids]));
+  }
+  const { primary, swapAlternative } = proposeReallocations({ ...ctx, exclusions });
   const hasApproved = listPlansByDate(date).some((p) => p.status === "approved");
 
   const planId = getDb().transaction(() => {
@@ -86,6 +100,10 @@ export function generatePlanForDate(date: string, actor: string): Plan | null {
 
   // Re-apply the admin's manual choices from the superseded draft (validation will flag any that no longer work).
   const fresh = getPlan(planId)!;
+  for (const a of fresh.assignments) {
+    const ids = rejections.get(a.sessionId);
+    if (ids) setRejectedTherapists(a.id, ids);
+  }
   for (const edit of previousEdits) {
     const target = fresh.assignments.find((a) => a.sessionId === edit.sessionId);
     if (target && target.toTherapistId !== edit.toTherapistId) applyEdit(fresh, target, edit.toTherapistId, ctx);
@@ -185,6 +203,82 @@ export function editAssignment(planId: number, assignmentId: number, toTherapist
   })();
   return getPlanOrThrow(planId);
 }
+
+/**
+ * Admin rejects one row's proposal: that therapist is never proposed for this row again (in this draft and
+ * any regenerated draft), and the row is re-run alone using the therapists still free in that slot, keeping every
+ * other row as it is. If nobody is left, the row becomes a cancellation. The previous state is kept for Undo.
+ */
+export function rejectAssignment(planId: number, assignmentId: number, actor: string): Plan {
+  const plan = getPlanOrThrow(planId);
+  if (plan.status !== "draft") throw new HttpError(409, "Only draft plans can be changed");
+  const a = plan.assignments.find((x) => x.id === assignmentId);
+  if (!a) throw new HttpError(404, `Assignment ${assignmentId} is not part of plan ${planId}`);
+  if (a.chainId) throw new HttpError(409, "This row is part of a swap — reject the whole swap plan instead");
+
+  const rejectedName = a.toTherapistName;
+  const rejected =
+    a.toTherapistId === null || a.rejectedTherapistIds.includes(a.toTherapistId)
+      ? a.rejectedTherapistIds
+      : [...a.rejectedTherapistIds, a.toTherapistId];
+  // Same ordering as the engine: available first, then rule step, then distance.
+  const next = listCandidates(planId, assignmentId).find((c) => c.available && !rejected.includes(c.therapistId));
+  const rejectedNote = rejectedName ? `Re-run after you rejected ${rejectedName}` : "Re-run on request";
+
+  getDb().transaction(() => {
+    setAssignmentState(a.id, {
+      toTherapistId: next?.therapistId ?? null,
+      step: next?.step ?? "cancel",
+      distanceKm: next?.distanceKm ?? null,
+      rationale: next
+        ? [rejectedNote, ...next.reasons]
+        : [`${rejectedNote}: no other therapist is free in the ${a.slot} slot`],
+      editedByAdmin: false,
+      rejectedTherapistIds: rejected,
+      history: [...getAssignmentHistory(a.id), snapshot(a)],
+    });
+    logAudit({
+      actor,
+      action: "plan.assignment_rejected",
+      entityType: "plan_assignment",
+      entityId: a.id,
+      details: { planId, rejected: a.toTherapistId, next: next?.therapistId ?? null },
+    });
+  })();
+  return getPlanOrThrow(planId);
+}
+
+/** Undo the latest row-level reject: restores the previous therapist and un-rejects them. */
+export function undoAssignmentReject(planId: number, assignmentId: number, actor: string): Plan {
+  const plan = getPlanOrThrow(planId);
+  if (plan.status !== "draft") throw new HttpError(409, "Only draft plans can be changed");
+  const a = plan.assignments.find((x) => x.id === assignmentId);
+  if (!a) throw new HttpError(404, `Assignment ${assignmentId} is not part of plan ${planId}`);
+  const history = getAssignmentHistory(a.id);
+  const previous = history.pop();
+  if (!previous) throw new HttpError(409, "Nothing to undo for this row");
+
+  getDb().transaction(() => {
+    setAssignmentState(a.id, { ...previous, history });
+    logAudit({
+      actor,
+      action: "plan.assignment_reject_undone",
+      entityType: "plan_assignment",
+      entityId: a.id,
+      details: { planId, restored: previous.toTherapistId },
+    });
+  })();
+  return getPlanOrThrow(planId);
+}
+
+const snapshot = (a: PlanAssignment): AssignmentSnapshot => ({
+  toTherapistId: a.toTherapistId,
+  step: a.step,
+  distanceKm: a.distanceKm,
+  rationale: a.rationale,
+  editedByAdmin: a.editedByAdmin,
+  rejectedTherapistIds: a.rejectedTherapistIds,
+});
 
 /** Every therapist as an option for one assignment, best first, with why they can't take it if so. */
 export function listCandidates(planId: number, assignmentId: number): AssignmentCandidate[] {

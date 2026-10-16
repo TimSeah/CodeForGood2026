@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { VideoMomentType, VideoReview } from "@/api/types";
-import { Badge, Button, Card, QueryState } from "@/components/ui";
+import { Badge, Button, Callout, Card, PageHeader, QueryState } from "@/components/ui";
 import { useProcessVideoReview, useUploadAndReviewVideo, useVideoReviews } from "./api";
 
 const ACCEPTED_TYPES = ["video/mp4", "video/webm", "video/quicktime", "video/x-matroska"];
@@ -58,29 +58,27 @@ export function VideoReviewPage() {
   }
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-xl font-semibold">Session video review</h1>
-        <p className="mt-1 max-w-3xl text-sm text-slate-600">
-          Upload a recorded session to create a concise draft summary and short clips of possible escalation, recovery, and progress.
-        </p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader eyebrow="Clinical tools" title="Session video review" />
+      <p className="max-w-3xl text-sm text-muted">
+        Upload a recorded session to create a concise draft summary and short clips of possible escalation, recovery, and progress.
+      </p>
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
         <Card title="Upload a recording">
           <div
-            className="rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 p-7 text-center"
+            className="rounded-xl border-2 border-dashed border-field bg-subtle p-7 text-center"
             onDragOver={(event) => event.preventDefault()}
             onDrop={(event) => {
               event.preventDefault();
               chooseFile(event.dataTransfer.files[0]);
             }}
           >
-            <p className="font-medium text-slate-800">{file ? file.name : "Drop a session video here"}</p>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="font-bold text-ink">{file ? file.name : "Drop a session video here"}</p>
+            <p className="mt-1 text-sm text-muted">
               {file ? formatBytes(file.size) : "MP4, WebM, MOV, or MKV · up to 1 GB"}
             </p>
-            <label className="mt-4 inline-block cursor-pointer rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-slate-100">
+            <label className="mt-4 inline-flex min-h-10 cursor-pointer items-center rounded-[10px] border border-field bg-white px-4 text-sm font-semibold hover:bg-subtle">
               Choose video
               <input
                 className="sr-only"
@@ -90,25 +88,29 @@ export function VideoReviewPage() {
               />
             </label>
           </div>
-          {fileError && <p className="mt-3 text-sm text-rose-700">{fileError}</p>}
-          {upload.error && <p className="mt-3 text-sm text-rose-700">Review failed: {upload.error.message}</p>}
+          {fileError && <div className="mt-3"><Callout tone="danger">{fileError}</Callout></div>}
+          {upload.error && <div className="mt-3"><Callout tone="danger">Review failed: {upload.error.message}</Callout></div>}
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <Button disabled={!file || upload.isPending} onClick={startReview}>
               {upload.isPending ? "Uploading and reviewing…" : "Upload and create review"}
             </Button>
             {upload.isPending && (
-              <span className="text-sm text-slate-500">A 10 minute video can take several minutes to process.</span>
+              <span className="text-sm text-muted">A 10 minute video can take several minutes to process.</span>
             )}
           </div>
         </Card>
 
-        <aside className="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950">
-          <h2 className="font-semibold">Privacy and review</h2>
-          <ul className="mt-2 list-disc space-y-2 pl-5">
-            <li>The original video and generated clips are stored on this backend computer.</li>
-            <li>Compressed audio and sampled frames are sent to OpenAI for analysis.</li>
-            <li>AI output is a draft for a qualified clinician to check before it is used in records or decisions.</li>
-          </ul>
+        <aside>
+          <Callout tone="info">
+            <div>
+              <h2 className="font-bold">Privacy and review</h2>
+              <ul className="mt-2 list-disc space-y-2 pl-5 font-normal">
+                <li>The original video and generated clips are stored on this backend computer.</li>
+                <li>Compressed audio and sampled frames are sent to OpenAI for analysis.</li>
+                <li>AI output is a draft for a qualified clinician to check before it is used in records or decisions.</li>
+              </ul>
+            </div>
+          </Callout>
         </aside>
       </div>
 
@@ -140,20 +142,20 @@ function ReviewResult({ review, compact = false }: { review: VideoReview; compac
     review.status === "completed" ? "success" : review.status === "failed" ? "danger" : review.status === "processing" ? "warning" : "neutral";
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <section className="rounded-xl border border-line bg-white p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h2 className="font-semibold text-slate-900">{review.originalFilename}</h2>
-          <p className="text-xs text-slate-500">
+          <h2 className="font-bold text-ink">{review.originalFilename}</h2>
+          <p className="text-xs text-muted">
             {formatBytes(review.sizeBytes)} · {new Date(review.createdAt.replace(" ", "T") + "Z").toLocaleString()}
           </p>
         </div>
         <Badge tone={statusTone}>{review.status.replace("_", " ")}</Badge>
       </div>
 
-      {review.status === "failed" && <p className="mt-3 text-sm text-rose-700">{review.errorMessage ?? "Review failed."}</p>}
+      {review.status === "failed" && <p className="mt-3 text-sm font-semibold text-bad">{review.errorMessage ?? "Review failed."}</p>}
       {(review.status === "uploading" || review.status === "uploaded" || review.status === "processing") && (
-        <p className="mt-3 text-sm text-slate-600">
+        <p className="mt-3 text-sm text-muted">
           {review.status === "processing" ? "OpenAI is reviewing the transcript and sampled frames, then local clips will be created." : "Waiting to process this upload."}
         </p>
       )}
@@ -162,13 +164,13 @@ function ReviewResult({ review, compact = false }: { review: VideoReview; compac
           <Button variant="secondary" disabled={process.isPending} onClick={() => process.mutate(review.id)}>
             {process.isPending ? "Reviewing…" : "Retry review"}
           </Button>
-          {process.error && <p className="mt-2 text-sm text-rose-700">{process.error.message}</p>}
+          {process.error && <p className="mt-2 text-sm font-semibold text-bad">{process.error.message}</p>}
         </div>
       )}
       {review.summary && (
         <div className="mt-4">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Draft summary</h3>
-          <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-800">{review.summary}</p>
+          <h3 className="text-xs font-bold tracking-wider text-muted uppercase">Draft summary</h3>
+          <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-ink-soft">{review.summary}</p>
         </div>
       )}
 
@@ -176,25 +178,25 @@ function ReviewResult({ review, compact = false }: { review: VideoReview; compac
         <div className="mt-5">
           <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
             <h3 className="font-semibold">Important moments</h3>
-            <span className="text-xs text-slate-500">{review.clips.length} clips generated locally</span>
+            <span className="text-xs text-muted">{review.clips.length} clips generated locally</span>
           </div>
           {review.clips.length === 0 ? (
-            <p className="rounded-md bg-slate-50 p-3 text-sm text-slate-600">No clear moments met the review threshold.</p>
+            <p className="rounded-lg bg-subtle p-3 text-sm text-muted">No clear moments met the review threshold.</p>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {review.clips.map((clip) => (
-                <article key={clip.id} className="overflow-hidden rounded-lg border border-slate-200">
-                  <video className="aspect-video w-full bg-slate-950" controls preload="metadata" src={clip.videoUrl}>
+                <article key={clip.id} className="overflow-hidden rounded-xl border border-line">
+                  <video className="aspect-video w-full bg-ink" controls preload="metadata" src={clip.videoUrl}>
                     Your browser cannot play this clip.
                   </video>
                   <div className="space-y-2 p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <Badge tone={MOMENT_TONES[clip.eventType]}>{MOMENT_LABELS[clip.eventType]}</Badge>
-                      <span className="text-xs tabular-nums text-slate-500">
+                      <span className="text-xs tabular-nums text-muted">
                         {formatTimestamp(clip.startSeconds)}–{formatTimestamp(clip.endSeconds)}
                       </span>
                     </div>
-                    <p className="text-sm leading-5 text-slate-700">{clip.caption}</p>
+                    <p className="text-sm leading-5 text-ink-soft">{clip.caption}</p>
                   </div>
                 </article>
               ))}

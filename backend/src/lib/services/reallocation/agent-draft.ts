@@ -72,6 +72,7 @@ export class AgentDraft {
     const candidate = this.candidates(assignmentId).find((item) => item.therapistId === therapistId);
     if (!candidate) throw new Error(`Therapist ${therapistId} does not exist`);
     if (!candidate.available) throw new Error(`${candidate.therapistName} is unavailable: ${candidate.unavailableReason}`);
+    if (candidate.rejected) throw new Error(`${candidate.therapistName} was rejected by the admin for this session`);
 
     Object.assign(assignment, {
       toTherapistId: candidate.therapistId,
@@ -91,7 +92,9 @@ export class AgentDraft {
   validate(): ValidationIssue[] {
     const issues = validatePlan({ ...this.ctx, assignments: this.assignments });
     for (const assignment of this.assignments.filter((item) => item.toTherapistId === null)) {
-      const available = candidatesForAssignment(assignment, this.assignments, this.ctx).filter((item) => item.available);
+      const available = candidatesForAssignment(assignment, this.assignments, this.ctx).filter(
+        (item) => item.available && !item.rejected,
+      );
       if (available.length > 0) {
         issues.push({
           level: "error",

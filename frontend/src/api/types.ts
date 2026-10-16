@@ -133,6 +133,10 @@ export interface PlanAssignment {
   /** Moves that belong to the same swap chain share an id. */
   chainId: string | null;
   editedByAdmin: boolean;
+  /** Therapists the admin rejected for this row (never re-proposed for it in this plan). */
+  rejectedTherapistIds: number[];
+  /** True if a row-level reject can be undone. */
+  canUndo: boolean;
   parentStatus: ParentStatus;
   parentRespondedAt: string | null;
 }
@@ -146,6 +150,8 @@ export interface AssignmentCandidate {
   distanceKm: number | null;
   reasons: string[];
   available: boolean;
+  /** The admin rejected this therapist for this row (they can still pick them manually). */
+  rejected: boolean;
   /** Why they can't take it, e.g. "Away (medical)" or "Booked with Lola". */
   unavailableReason: string | null;
 }

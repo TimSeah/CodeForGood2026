@@ -8,10 +8,10 @@ export interface CalendarEntry {
 }
 
 const TONE = {
-  normal: "text-slate-700",
-  changed: "rounded bg-sky-100 px-1 text-sky-900",
-  removed: "text-slate-400 line-through",
-  cancelled: "rounded bg-rose-100 px-1 text-rose-800",
+  normal: "bg-sunk text-ink-soft",
+  changed: "bg-info-bg text-info ring-1 ring-info/40",
+  removed: "text-muted line-through",
+  cancelled: "bg-bad-bg text-bad",
 };
 
 /** Sun–Sat month grid like the per-person sheets in Therapists-/Students-Schedule.xlsx. */
@@ -33,24 +33,24 @@ export function MonthCalendar({
 
   return (
     <div className="overflow-x-auto">
-      <p className="mb-2 text-sm font-medium">{formatMonth(month)}</p>
-      <div className="grid min-w-[640px] grid-cols-7 border-l border-t border-slate-200 text-xs">
+      <p className="mb-3 text-sm font-bold">{formatMonth(month)}</p>
+      <div className="grid min-w-[680px] grid-cols-7 gap-1 text-xs">
         {WEEKDAYS.map((d) => (
-          <div key={d} className="border-b border-r border-slate-200 bg-slate-50 px-2 py-1 font-medium text-slate-500">
+          <div key={d} className="pb-1 text-center font-bold text-muted">
             {d}
           </div>
         ))}
         {cells.map((date, i) => (
           <div
             key={date ?? `pad-${i}`}
-            className={`min-h-20 border-b border-r border-slate-200 p-1.5 ${date === highlightDate ? "bg-amber-50 ring-2 ring-inset ring-amber-300" : ""}`}
+            className={`min-h-20 rounded-lg p-1.5 ${date === highlightDate ? "bg-[#F3F8F7] ring-2 ring-brand" : date ? "bg-subtle" : ""}`}
           >
             {date && (
               <>
-                <div className="mb-1 text-slate-400">{Number(date.slice(8))}</div>
+                <div className={`mb-1 font-bold ${date === highlightDate ? "text-brand" : "text-muted"}`}>{Number(date.slice(8))}</div>
                 <ul className="space-y-0.5">
                   {(entriesByDate.get(date) ?? []).map((e) => (
-                    <li key={e.key} className={TONE[e.tone ?? "normal"]}>
+                    <li key={e.key} className={`rounded-[5px] px-1.5 py-px leading-[15px] font-semibold ${TONE[e.tone ?? "normal"]}`}>
                       {e.content}
                     </li>
                   ))}

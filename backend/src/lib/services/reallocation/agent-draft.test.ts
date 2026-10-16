@@ -19,7 +19,7 @@ const student = (id: number): EngineStudent => ({ id, name: `Kid ${id}`, plan: "
 const plan: Plan = {
   id: 7, date: "2031-07-11", kind: "primary", status: "draft", parentPlanId: null, notifyMode: null,
   createdBy: "engine", createdAt: "", decidedBy: null, decidedAt: null, issues: [],
-  assignments: [{ id: 70, planId: 7, sessionId: 10, slot: "AM", startTime: "08:30", endTime: "12:00", location: "clinic", studentId: 100, studentName: "Kid A", studentPlan: "Core", fromTherapistId: 1, fromTherapistName: "Absent A", toTherapistId: 3, toTherapistName: "Free C", step: "tier", distanceKm: null, rationale: ["initial"], chainId: null, editedByAdmin: false, parentStatus: "pending", parentRespondedAt: null }],
+  assignments: [{ id: 70, planId: 7, sessionId: 10, slot: "AM", startTime: "08:30", endTime: "12:00", location: "clinic", studentId: 100, studentName: "Kid A", studentPlan: "Core", fromTherapistId: 1, fromTherapistName: "Absent A", toTherapistId: 3, toTherapistName: "Free C", step: "tier", distanceKm: null, rationale: ["initial"], chainId: null, editedByAdmin: false, rejectedTherapistIds: [], canUndo: false, parentStatus: "pending", parentRespondedAt: null }],
 };
 const ctx = { sessions, absences, therapists, students: new Map([[100, student(100)], [101, student(101)]]), exclusions: new Map<number, Set<number>>() };
 
@@ -44,5 +44,18 @@ describe("AgentDraft", () => {
     const result = draft.finish();
     expect(result.valid).toBe(false);
     expect(result.issues.some((issue) => issue.level === "error" && issue.message.includes("avoidable"))).toBe(true);
+  });
+
+  it("does not let the agent restore a therapist rejected by the admin", () => {
+    const rejectedPlan: Plan = {
+      ...plan,
+      assignments: plan.assignments.map((assignment) => ({
+        ...assignment,
+        rejectedTherapistIds: [3],
+      })),
+    };
+    const draft = new AgentDraft(rejectedPlan, ctx);
+    expect(draft.candidates(70).find((candidate) => candidate.therapistId === 3)?.rejected).toBe(true);
+    expect(() => draft.setAssignment(70, 3, "Restore Free C")).toThrow(/rejected by the admin/);
   });
 });

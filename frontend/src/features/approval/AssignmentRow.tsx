@@ -1,8 +1,14 @@
 import { useState } from "react";
 import type { PlanAssignment, ValidationIssue } from "@/api/types";
-import { Badge, Button, inputClass } from "@/components/ui";
+import { Badge, Button, LinkButton } from "@/components/ui";
+import { Icon } from "@/components/icons";
 import { formatTime, STEP_LABEL, STEP_TONE } from "@/lib/format";
-import { useCandidates, useEditAssignment } from "./api";
+import { useTherapists } from "@/features/reference/api";
+import { useCandidates, useEditAssignment, useRejectAssignment, useUndoAssignmentReject } from "./api";
+
+/** Column layout shared by the row and the header in DraftPlanCard. Stacks on narrow screens. */
+export const ROW_GRID =
+  "md:grid md:grid-cols-[96px_minmax(120px,1fr)_minmax(190px,1.3fr)_minmax(200px,1.6fr)_116px] md:gap-4 md:items-start";
 
 /** One changed session in a plan. Drafts can be edited; the backend re-validates after every change. */
 export function AssignmentRow({
@@ -19,52 +25,127 @@ export function AssignmentRow({
   const errors = issues.filter((i) => i.level === "error");
 
   return (
-    <tr className={`align-top ${errors.length ? "bg-rose-50" : ""}`}>
-      <td className="py-2 pr-2 whitespace-nowrap">
-        <Badge>{a.slot}</Badge>
-        <div className="mt-1 text-xs text-slate-500">
-          {formatTime(a.startTime)}–{formatTime(a.endTime)}
-        </div>
-      </td>
-      <td className="pr-2">
-        <div className="font-medium">{a.studentName}</div>
-        <div className="text-xs text-slate-500">
+    <div
+      id={`assignment-${a.id}`}
+      className={`flex flex-col gap-3 border-t border-line-soft px-5 py-4 ${ROW_GRID} ${
+        errors.length ? "bg-[#FDF1EF] shadow-[inset_4px_0_0_#C0392B]" : editing ? "bg-[#F3F8F7]" : ""
+      }`}
+    >
+      <div>
+        <div className="font-bold">{formatTime(a.startTime)}</div>
+        <div className="text-[13px] text-muted">to {formatTime(a.endTime)}</div>
+      </div>
+      <div>
+        <div className="font-bold">{a.studentName}</div>
+        <div className="text-[13px] text-muted">
           {a.studentPlan ?? "—"} · <span className="capitalize">{a.location}</span>
         </div>
-      </td>
-      <td className="pr-2 text-slate-500">{a.fromTherapistName ?? "—"}</td>
-      <td className="pr-2">
-        {editing ? (
+      </div>
+
+      {editing ? (
+        <div className="md:col-span-3">
           <CandidateSelect a={a} onDone={() => setEditing(false)} />
-        ) : (
-          <div className="flex flex-wrap items-center gap-1">
-            <span className={isCancel ? "font-medium text-rose-600" : "font-medium"}>{isCancel ? "Cancel session" : a.toTherapistName}</span>
-            <Badge tone={STEP_TONE[a.step]}>{STEP_LABEL[a.step]}</Badge>
-            {a.distanceKm !== null && <span className="text-xs text-slate-500">{a.distanceKm} km</span>}
-            {editable && (
-              <button className="text-xs text-sky-700 underline" onClick={() => setEditing(true)}>
-                change
-              </button>
-            )}
+        </div>
+      ) : (
+        <>
+          <div className="flex flex-col gap-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              {a.fromTherapistName && (
+                <>
+                  <span className="text-muted line-through">{a.fromTherapistName}</span>
+                  <Icon name="arrow" size={16} className="text-muted" />
+                </>
+              )}
+              <span className={`font-extrabold ${isCancel ? "text-bad" : ""}`}>{isCancel ? "Session cancelled" : a.toTherapistName}</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Badge tone={STEP_TONE[a.step]}>{STEP_LABEL[a.step]}</Badge>
+              {a.distanceKm !== null && <span className="text-xs text-muted">{a.distanceKm} km away</span>}
+            </div>
           </div>
-        )}
-      </td>
-      <td className="text-xs text-slate-600">
-        <ul className="list-disc space-y-0.5 pl-4">
-          {a.rationale.map((why) => (
-            <li key={why}>{why}</li>
-          ))}
-        </ul>
-        {issues.map((i) => (
-          <p key={i.message} className={i.level === "error" ? "mt-1 font-medium text-rose-700" : "mt-1 text-amber-700"}>
-            {i.level === "error" ? "✖" : "⚠"} {i.message}
-          </p>
-        ))}
-      </td>
-    </tr>
+          <div className="flex flex-col gap-2 text-[13px]">
+            <ul className="space-y-1 text-ink-soft">
+              {a.rationale.map((why) => (
+                <li key={why} className="flex gap-2">
+                  <span className="mt-[7px] size-[5px] shrink-0 rounded-full bg-[#9AA39F]" aria-hidden="true" />
+                  {why}
+                </li>
+              ))}
+            </ul>
+            {issues.map((i) =>
+              i.level === "error" ? (
+                <p key={i.message} className="flex gap-1.5 font-bold text-[#8A2216]">
+                  <Icon name="error" size={16} className="mt-px shrink-0" />
+                  {i.message}
+                </p>
+              ) : (
+                <p key={i.message} className="rounded-lg bg-warn-bg px-2.5 py-1.5 font-semibold text-warn">
+                  {i.message}
+                </p>
+              ),
+            )}
+            <RejectedNote ids={a.rejectedTherapistIds} />
+          </div>
+          <div className="flex flex-wrap items-center gap-1 md:flex-col md:items-end">
+            {editable && (
+              <Button variant={errors.length ? "primary" : "secondary"} size="sm" onClick={() => setEditing(true)}>
+                Change
+              </Button>
+            )}
+            {editable && <RowActions a={a} />}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
+/** Reject this row's proposal (re-run just this row) or undo the last reject. */
+function RowActions({ a }: { a: PlanAssignment }) {
+  const reject = useRejectAssignment();
+  const undo = useUndoAssignmentReject();
+  const busy = reject.isPending || undo.isPending;
+  const ids = { planId: a.planId, assignmentId: a.id };
+
+  if (a.chainId) {
+    return (
+      <span className="px-1.5 py-1 text-xs text-muted" title="Part of a swap: reject the whole swap plan instead">
+        Part of a swap
+      </span>
+    );
+  }
+  return (
+    <>
+      <LinkButton
+        tone={a.toTherapistId === null ? "brand" : "danger"}
+        disabled={busy}
+        onClick={() => reject.mutate(ids)}
+        title={
+          a.toTherapistId === null
+            ? "Look again for a free therapist for this session"
+            : `Reject ${a.toTherapistName} for this session and pick the next best free therapist`
+        }
+      >
+        {reject.isPending ? "Working…" : a.toTherapistId === null ? "Look again" : "Reject"}
+      </LinkButton>
+      {a.canUndo && (
+        <LinkButton disabled={busy} onClick={() => undo.mutate(ids)}>
+          Undo reject
+        </LinkButton>
+      )}
+      {(reject.error || undo.error) && <span className="text-xs font-semibold text-bad">{(reject.error ?? undo.error)!.message}</span>}
+    </>
+  );
+}
+
+function RejectedNote({ ids }: { ids: number[] }) {
+  const { data: therapists = [] } = useTherapists();
+  if (ids.length === 0) return null;
+  const names = ids.map((id) => therapists.find((t) => t.id === id)?.name ?? `#${id}`);
+  return <p className="text-muted">You rejected: {names.join(", ")}</p>;
+}
+
+/** Pick a replacement from the ranked candidate list (radio list: best first, then unavailable, then cancel). */
 function CandidateSelect({ a, onDone }: { a: PlanAssignment; onDone: () => void }) {
   const { data = [], isLoading } = useCandidates(a.planId, a.id, true);
   const edit = useEditAssignment();
@@ -76,36 +157,67 @@ function CandidateSelect({ a, onDone }: { a: PlanAssignment; onDone: () => void 
       { onSuccess: onDone },
     );
 
-  if (isLoading) return <span className="text-xs text-slate-500">Loading options…</span>;
+  if (isLoading) return <span className="text-sm text-muted">Loading options…</span>;
   const available = data.filter((c) => c.available);
   const unavailable = data.filter((c) => !c.available);
+  const name = `candidate-${a.id}`;
+
+  const option = (key: string, content: React.ReactNode, muted = false) => (
+    <label
+      key={key}
+      className={`flex cursor-pointer items-center gap-3 border-t border-line-soft px-3.5 py-2.5 text-sm first:border-t-0 has-checked:bg-brand-soft ${muted ? "text-[#6B716E]" : ""}`}
+    >
+      <input type="radio" name={name} value={key} checked={value === key} onChange={() => setValue(key)} className="size-4 accent-brand" />
+      {content}
+    </label>
+  );
+
   return (
-    <div className="flex flex-wrap items-center gap-1">
-      <select className={inputClass} value={value} onChange={(e) => setValue(e.target.value)} aria-label="Replacement therapist">
-        <optgroup label="Available (best first)">
-          {available.map((c) => (
-            <option key={c.therapistId} value={c.therapistId}>
-              {c.therapistName} ({c.rank}) · {STEP_LABEL[c.step]}
-              {c.distanceKm !== null ? ` · ${c.distanceKm} km` : ""}
-            </option>
-          ))}
-        </optgroup>
-        <optgroup label="Not available (will fail validation)">
-          {unavailable.map((c) => (
-            <option key={c.therapistId} value={c.therapistId}>
-              {c.therapistName} ({c.rank}) · {c.unavailableReason}
-            </option>
-          ))}
-        </optgroup>
-        <option value="cancel">Cancel the session</option>
-      </select>
-      <Button onClick={save} disabled={edit.isPending}>
-        Save
-      </Button>
-      <Button variant="secondary" onClick={onDone}>
-        Back
-      </Button>
-      {edit.error && <span className="text-xs text-rose-600">{edit.error.message}</span>}
-    </div>
+    <fieldset className="flex flex-col gap-2.5">
+      <legend className="mb-2.5 text-[13px] font-bold text-ink-soft">
+        Who covers {a.studentName}
+        {a.fromTherapistName ? ` instead of ${a.fromTherapistName}` : ""}?
+      </legend>
+      <div className="max-h-80 overflow-y-auto rounded-xl border border-field bg-white">
+        <div className="bg-[#F3FAF5] px-3.5 py-2 text-xs font-bold text-good">Available — best first</div>
+        {available.length === 0 && <p className="px-3.5 py-2.5 text-sm text-muted">Nobody is free for this session.</p>}
+        {available.map((c) =>
+          option(
+            String(c.therapistId),
+            <>
+              <span className="font-bold">{c.therapistName}</span>
+              <span className="text-[13px] text-muted">{c.rank}</span>
+              <Badge tone={STEP_TONE[c.step]}>{STEP_LABEL[c.step]}</Badge>
+              {c.rejected && <Badge tone="danger">rejected by you</Badge>}
+              {c.distanceKm !== null && <span className="ml-auto text-[13px] text-muted">{c.distanceKm} km</span>}
+            </>,
+          ),
+        )}
+        {unavailable.length > 0 && (
+          <div className="border-t border-line-soft bg-subtle px-3.5 py-2 text-xs font-bold text-muted">Not available — will fail validation</div>
+        )}
+        {unavailable.map((c) =>
+          option(
+            String(c.therapistId),
+            <>
+              <span className="font-bold">{c.therapistName}</span>
+              <span className="text-[13px]">{c.rank}</span>
+              <span className="ml-auto text-right text-[13px]">{c.unavailableReason}</span>
+            </>,
+            true,
+          ),
+        )}
+        <div className="border-t border-line-soft">{option("cancel", <span className="font-bold text-bad">Cancel this session instead</span>)}</div>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button onClick={save} disabled={edit.isPending}>
+          {edit.isPending ? "Saving…" : "Save"}
+        </Button>
+        <Button variant="secondary" onClick={onDone}>
+          Back
+        </Button>
+        {edit.error && <span className="text-sm font-semibold text-bad">{edit.error.message}</span>}
+      </div>
+    </fieldset>
   );
 }

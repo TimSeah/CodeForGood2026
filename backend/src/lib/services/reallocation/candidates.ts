@@ -55,6 +55,7 @@ export function candidatesForAssignment(
         distanceKm: classification.distanceKm,
         reasons: classification.reasons,
         available: unavailableReason === null,
+        rejected: assignment.rejectedTherapistIds.includes(therapist.id),
         unavailableReason,
       };
     })

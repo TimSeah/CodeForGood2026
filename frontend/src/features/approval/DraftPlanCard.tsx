@@ -1,8 +1,11 @@
 import { useState } from "react";
-import type { NotifyMode, Plan } from "@/api/types";
-import { Badge, Button, Card, Modal } from "@/components/ui";
-import { AssignmentRow } from "./AssignmentRow";
+import type { NotifyMode, Plan, Slot } from "@/api/types";
+import { Badge, Button, Callout, Modal } from "@/components/ui";
+import { Icon } from "@/components/icons";
+import { AssignmentRow, ROW_GRID } from "./AssignmentRow";
 import { useApprovePlan, useRejectPlan } from "./api";
+
+const SLOT_LABEL: Record<Slot, string> = { AM: "Morning", PM: "Afternoon" };
 
 /** A tentative schedule waiting for the admin: review, edit, then approve or reject. */
 export function DraftPlanCard({ plan, title }: { plan: Plan; title: string }) {
@@ -12,79 +15,107 @@ export function DraftPlanCard({ plan, title }: { plan: Plan; title: string }) {
   const errors = plan.issues.filter((i) => i.level === "error");
   const general = plan.issues.filter((i) => i.assignmentId === undefined);
   const cancels = plan.assignments.filter((a) => a.toTherapistId === null).length;
+  const firstError = errors.find((i) => i.assignmentId !== undefined);
 
   const doApprove = (notifyMode: NotifyMode) =>
     approve.mutate({ planId: plan.id, notifyMode }, { onSuccess: () => setConfirming(false) });
 
   return (
-    <Card
-      title={title}
-      actions={
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge tone="neutral">{plan.assignments.length - cancels} reassigned</Badge>
-          <Badge tone={cancels ? "danger" : "neutral"}>{cancels} cancelled</Badge>
-          <Button variant="secondary" onClick={() => reject.mutate(plan.id)} disabled={reject.isPending}>
-            Reject
-          </Button>
-          <Button onClick={() => setConfirming(true)} disabled={errors.length > 0} title={errors.length ? "Fix the errors first" : ""}>
-            Approve…
-          </Button>
-        </div>
-      }
-    >
+    <>
       {errors.length > 0 && (
-        <p className="mb-3 rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-800">
-          {errors.length} error(s) must be fixed before this plan can be approved.
-        </p>
+        <Callout
+          tone="danger"
+          action={
+            firstError && (
+              <a href={`#assignment-${firstError.assignmentId}`} className="font-bold underline-offset-3 hover:underline">
+                Show me
+              </a>
+            )
+          }
+        >
+          {errors.length} error{errors.length === 1 ? "" : "s"} must be fixed before this plan can be approved.
+        </Callout>
       )}
       {general.map((i) => (
-        <p key={i.message} className="mb-2 text-sm text-rose-700">
-          ✖ {i.message}
-        </p>
+        <Callout key={i.message} tone={i.level === "error" ? "danger" : "warning"}>
+          {i.message}
+        </Callout>
       ))}
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[760px] text-left text-sm">
-          <thead className="text-xs text-slate-500">
-            <tr>
-              <th className="py-2">Slot</th>
-              <th>Child</th>
-              <th>Usual therapist</th>
-              <th>Replacement</th>
-              <th>Why</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {plan.assignments.map((a) => (
-              <AssignmentRow key={a.id} a={a} editable issues={plan.issues.filter((i) => i.assignmentId === a.id)} />
-            ))}
-          </tbody>
-        </table>
+
+      <section className="overflow-hidden rounded-2xl border border-line bg-white" aria-label={title}>
+        <div className={`hidden bg-subtle px-5 py-3 text-xs font-bold tracking-wide text-muted uppercase ${ROW_GRID}`}>
+          <span>Time</span>
+          <span>Child</span>
+          <span>Who covers</span>
+          <span>Why this choice</span>
+          <span className="text-right">Actions</span>
+        </div>
+        {(["AM", "PM"] as const).map((slot) => {
+          const rows = plan.assignments.filter((a) => a.slot === slot);
+          if (rows.length === 0) return null;
+          return (
+            <div key={slot}>
+              <div className="border-t border-line-soft bg-paper px-5 py-2.5 text-[13px] font-extrabold text-ink-soft">
+                {SLOT_LABEL[slot]} · {rows.length} change{rows.length === 1 ? "" : "s"}
+              </div>
+              {rows.map((a) => (
+                <AssignmentRow key={a.id} a={a} editable issues={plan.issues.filter((i) => i.assignmentId === a.id)} />
+              ))}
+            </div>
+          );
+        })}
+      </section>
+
+      <div className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center gap-3 border-t border-line bg-white/95 px-4 py-4 shadow-[0_-6px_20px_rgba(27,36,34,0.06)] backdrop-blur sm:-mx-8 sm:px-8 lg:-mx-10 lg:px-10">
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <strong>{title}</strong>
+          <Badge tone="success">{plan.assignments.length - cancels} reassigned</Badge>
+          <Badge tone={cancels ? "danger" : "neutral"}>{cancels} cancelled</Badge>
+          {errors.length > 0 && <Badge tone="danger">{errors.length} error{errors.length === 1 ? "" : "s"}</Badge>}
+        </div>
+        {(approve.error || reject.error) && <p className="text-sm font-semibold text-bad">{(approve.error ?? reject.error)!.message}</p>}
+        <div className="ml-auto flex gap-2">
+          <Button variant="danger" onClick={() => reject.mutate(plan.id)} disabled={reject.isPending}>
+            Reject plan
+          </Button>
+          <Button onClick={() => setConfirming(true)} disabled={errors.length > 0} title={errors.length ? "Fix the errors first" : ""}>
+            <Icon name="check" />
+            Approve plan…
+          </Button>
+        </div>
       </div>
-      {(approve.error || reject.error) && <p className="mt-2 text-sm text-rose-600">{(approve.error ?? reject.error)!.message}</p>}
 
       {confirming && (
-        <Modal title="Approve this plan" onClose={() => setConfirming(false)}>
-          <p className="text-sm text-slate-700">
-            The schedule will be updated now. Do you want automated WhatsApp messages sent to the parents and therapists?
+        <Modal title={`Approve ${title}?`} onClose={() => setConfirming(false)}>
+          <p className="text-sm text-ink-soft">
+            {plan.assignments.length - cancels} sessions covered, {cancels} cancelled. The schedule updates right away.
           </p>
-          <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-600">
-            <li>Parents are asked to reply YES/NO. No reply by 15 minutes before the session → it's cancelled.</li>
-            <li>Substitute therapists get a summary of the child's last session, with that session's log as a PDF.</li>
-            <li>If you choose not to send, record each parent's answer on this page yourself.</li>
-          </ul>
-          <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
-            WhatsApp sending isn't connected yet: messages are saved to the outbox below instead of being sent.
-          </p>
-          <div className="mt-4 flex flex-wrap justify-end gap-2">
+          <p className="mt-4 text-sm font-bold">Send WhatsApp messages to the parents and therapists?</p>
+          <ol className="mt-3 space-y-2.5 text-sm text-ink-soft">
+            {[
+              <>Parents are asked to reply <strong>YES</strong> or <strong>NO</strong>. No reply by 15 minutes before the session means it’s cancelled.</>,
+              <>Substitute therapists get a summary of the child’s last session, with that session’s log as a PDF.</>,
+              <>If you choose not to send, record each parent’s answer on the Parent replies page yourself.</>,
+            ].map((text, i) => (
+              <li key={i} className="flex gap-2.5">
+                <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-sunk text-xs font-extrabold">{i + 1}</span>
+                <span>{text}</span>
+              </li>
+            ))}
+          </ol>
+          <div className="mt-4">
+            <Callout tone="warning">WhatsApp sending isn’t connected yet: messages are saved to the outbox instead of being sent.</Callout>
+          </div>
+          <div className="mt-5 flex flex-wrap justify-end gap-2">
             <Button variant="secondary" onClick={() => doApprove("manual")} disabled={approve.isPending}>
-              No, I'll contact them
+              No, I’ll contact them
             </Button>
             <Button onClick={() => doApprove("whatsapp")} disabled={approve.isPending}>
-              Yes, send WhatsApp messages
+              Approve &amp; send messages
             </Button>
           </div>
         </Modal>
       )}
-    </Card>
+    </>
   );
 }
