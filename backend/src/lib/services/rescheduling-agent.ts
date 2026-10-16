@@ -3,6 +3,7 @@ import type { Plan, PlanAssignment } from "@/lib/types";
 import { AgentDraft } from "./reallocation/agent-draft";
 import { loadDayContext } from "./reallocation/context";
 import { applyAgentDraft, generatePlanForDate } from "./plans";
+import { suggestFromAgentPrompt } from "./preferences";
 
 type FunctionCall = {
   type: "function_call";
@@ -65,7 +66,10 @@ const INSTRUCTIONS = `You are the Autism Partnership scheduling agent. You edit 
 Use only the supplied tools and finish with finish_plan. First inspect the draft, then obey the admin's request.
 Before assigning a therapist, call list_candidates for that assignment and choose only an available option.
 Never assign an absent, rostered-off, parent-declined, or already-booked therapist. Avoid cancellations where possible.
-Prefer, in order: the child's team, plan-tier fit, prior cover history, any therapist, then blacklisted therapists.
+Admin-confirmed preferences are already applied: "never" rules make a therapist unavailable, and candidates marked
+avoided=true break an "avoid" rule — choose them only if no other available therapist fits, and say so in the reason.
+Then prefer, in order: the child's team, plan-tier fit, prior cover history, any therapist, then blacklisted therapists.
+Your changes apply to this draft only. Never claim to have saved a lasting rule; the admin confirms rules separately.
 The validator is authoritative. If finish_plan reports an error, repair the draft and validate again.
 Every set_assignment reason must explain the choice in plain language for the approving supervisor.`;
 
@@ -174,6 +178,9 @@ async function refineWithOpenAI(plan: Plan, prompt: string): Promise<PlanAssignm
 
 /** Generates the usual safe baseline, then lets the agent revise it through the shared scheduling tools. */
 export async function generateAgentPlanForDate(date: string, prompt: string, requestedBy: string): Promise<Plan | null> {
+  // If the instruction sounds like a lasting rule ("never…", "from now on…"), ask the admin to confirm it as a
+  // preference. It is only a SUGGESTION — it does not affect any schedule until the admin confirms it.
+  suggestFromAgentPrompt(prompt, requestedBy);
   if (!process.env.OPENAI_API_KEY) {
     throw new HttpError(503, "AI agent is not configured. Set OPENAI_API_KEY on the backend.");
   }

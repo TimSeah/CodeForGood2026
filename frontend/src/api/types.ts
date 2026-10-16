@@ -153,6 +153,10 @@ export interface AssignmentCandidate {
   available: boolean;
   /** The admin rejected this therapist for this row (they can still pick them manually). */
   rejected: boolean;
+  /** A confirmed SOFT preference says to avoid this therapist here (still assignable, with a warning). */
+  avoided: boolean;
+  /** Confirmed preferences that affect this candidate, in plain language. */
+  preferenceNotes: string[];
   /** Why they can't take it, e.g. "Away (medical)" or "Booked with Lola". */
   unavailableReason: string | null;
 }
@@ -226,8 +230,10 @@ export interface VideoReviewClip {
   startSeconds: number;
   endSeconds: number;
   eventType: VideoMomentType;
+  /** Observable, neutral description shown beside the clip. */
   caption: string;
   confidence: number;
+  /** Local backend media endpoint for this generated clip. */
   videoUrl: string;
 }
 
@@ -239,6 +245,7 @@ export interface VideoReview {
   status: VideoReviewStatus;
   summary: string | null;
   errorMessage: string | null;
+  /** Local backend media endpoint for the private source video. */
   videoUrl: string | null;
   clips: VideoReviewClip[];
   createdAt: string;
@@ -247,6 +254,7 @@ export interface VideoReview {
 
 export interface CreateVideoReviewResult {
   review: VideoReview;
+  /** Local API endpoint used by the browser to stream the source file to disk. */
   uploadUrl: string;
 }
 
@@ -268,6 +276,80 @@ export interface MonthlyPatternRow {
   homeArea: string | null;
   /** One entry per slot; MWF / TT each hold the cells for that weekday group (usually 0 or 1). */
   slots: Record<Slot, { MWF: PatternCell[]; TT: PatternCell[] }>;
+}
+
+// ---- Scheduling preference memory (docs/plans/scheduling-preferences.md) ------------------------
+
+/** Why an admin moved a proposed therapist off a session. Only the first two are pattern evidence. */
+export type ChangeReasonCode = "child_incompatible" | "therapist_time_unavailable" | "better_fit" | "one_off" | "other";
+
+export interface ChangeReason {
+  code: ChangeReasonCode;
+  note?: string | null;
+}
+
+/** pairing = therapist ↔ child; time_unavailable = therapist can't do sessions past a time on given weekdays. */
+export type PreferenceType = "pairing" | "time_unavailable";
+/** soft = avoid when another suitable therapist is free; hard = never (excluded + validation error). */
+export type PreferenceStrength = "soft" | "hard";
+/** Only "active" affects scheduling. "suggested" is a question waiting for the admin. */
+export type PreferenceStatus = "suggested" | "active" | "paused" | "rejected" | "removed";
+export type PreferenceSource = "pattern" | "admin" | "agent_prompt";
+/** Time rules: compare the boundary with the session's actual START or END time. */
+export type TimeBoundaryAppliesTo = "start" | "end";
+
+/** One admin change that supports a preference (from assignment_change_events). */
+export interface PreferenceEvidence {
+  eventId: number;
+  date: string;
+  slot: Slot;
+  startTime: string;
+  endTime: string;
+  studentId: number;
+  studentName: string;
+  removedTherapistId: number;
+  removedTherapistName: string;
+  newTherapistName: string | null;
+  action: "edited" | "rejected";
+  reasonCode: ChangeReasonCode | null;
+  reasonNote: string | null;
+  actor: string;
+  createdAt: string;
+}
+
+export interface SchedulingPreference {
+  id: number;
+  type: PreferenceType;
+  therapistId: number;
+  therapistName: string;
+  /** pairing only */
+  studentId: number | null;
+  studentName: string | null;
+  strength: PreferenceStrength;
+  status: PreferenceStatus;
+  source: PreferenceSource;
+  /** time_unavailable only: weekdays 0 = Sun … 6 = Sat (case-study calendar for July 2031). */
+  days: number[] | null;
+  /** time_unavailable only: HH:MM (Singapore time). */
+  boundaryTime: string | null;
+  /** start → sessions starting at/after the boundary; end → sessions still running after the boundary. */
+  appliesTo: TimeBoundaryAppliesTo | null;
+  effectiveFrom: string | null;
+  /** null = ongoing */
+  effectiveTo: string | null;
+  reason: string | null;
+  /** The question shown to the admin for a suggestion. */
+  question: string | null;
+  /** The agent instruction this suggestion came from (source = agent_prompt). */
+  agentPrompt: string | null;
+  confirmedBy: string | null;
+  confirmedAt: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  /** Plain-language statement of the rule. */
+  summary: string;
+  evidence: PreferenceEvidence[];
 }
 
 export interface AuditEntry {

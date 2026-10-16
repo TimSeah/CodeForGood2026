@@ -1,8 +1,10 @@
 import { listAbsencesByDate } from "@/lib/repositories/absences";
 import { listExclusions } from "@/lib/repositories/plans";
+import { listPreferenceRecords } from "@/lib/repositories/preferences";
 import { listSessionsByDate } from "@/lib/repositories/sessions";
 import { listCoverHistory, listStudents } from "@/lib/repositories/students";
 import { listTherapists } from "@/lib/repositories/therapists";
+import { summarizePreference } from "./preferences";
 import type { EngineStudent } from "./ranking";
 
 /** Loads everything the pure engine / validator needs for one date. */
@@ -28,5 +30,7 @@ export function loadDayContext(date: string) {
     therapists: listTherapists(),
     students,
     exclusions: listExclusions(date),
+    // Only ACTIVE (admin-confirmed) preferences; suggestions never reach the engine.
+    preferences: listPreferenceRecords(["active"]).map((p) => ({ ...p, summary: summarizePreference(p) })),
   };
 }

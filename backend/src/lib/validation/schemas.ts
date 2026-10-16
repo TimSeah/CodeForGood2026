@@ -63,7 +63,17 @@ export const generatePlanBody = z
   });
 export const approvePlanBody = z.object({ notifyMode: z.enum(["whatsapp", "manual"]), actor });
 export const actorBody = z.object({ actor });
-export const editAssignmentBody = z.object({ toTherapistId: z.number().int().positive().nullable(), actor });
+/** Why the admin moved a proposed therapist off a session (evidence for the preference memory). */
+export const changeReason = z.object({
+  code: z.enum(["child_incompatible", "therapist_time_unavailable", "better_fit", "one_off", "other"]),
+  note: z.string().trim().max(500).nullable().optional(),
+});
+export const editAssignmentBody = z.object({
+  toTherapistId: z.number().int().positive().nullable(),
+  reason: changeReason.nullable().optional(),
+  actor,
+});
+export const rejectAssignmentBody = z.object({ reason: changeReason.nullable().optional(), actor });
 export const expireBody = z.object({ now: z.iso.datetime({ offset: true }).optional() });
 
 export const parentResponseBody = z.object({ response: z.enum(["accepted", "declined"]), actor });
@@ -125,6 +135,39 @@ export const createVideoReviewBody = z.object({
   actor,
 });
 export const processVideoReviewBody = z.object({ actor });
+
+// ---- scheduling preferences ----
+const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Expected HH:MM (24h)");
+const preferenceFields = {
+  strength: z.enum(["soft", "hard"]),
+  /** 0 = Sun … 6 = Sat */
+  days: z.array(z.number().int().min(0).max(6)).min(1).max(7).nullable().optional(),
+  boundaryTime: hhmm.nullable().optional(),
+  appliesTo: z.enum(["start", "end"]).nullable().optional(),
+  ongoing: z.boolean().optional(),
+  effectiveFrom: isoDate.nullable().optional(),
+  effectiveTo: isoDate.nullable().optional(),
+  reason: z.string().trim().max(500).nullable().optional(),
+};
+export const preferenceQuery = z.object({
+  status: z
+    .string()
+    .optional()
+    .transform((v) => (v ? v.split(",") : undefined))
+    .pipe(z.array(z.enum(["suggested", "active", "paused", "rejected", "removed"])).optional()),
+});
+export const createPreferenceBody = z
+  .object({
+    type: z.enum(["pairing", "time_unavailable"]),
+    therapistId: z.number().int().positive(),
+    studentId: z.number().int().positive().nullable().optional(),
+    ...preferenceFields,
+    actor,
+  })
+  .refine((b) => b.type !== "pairing" || b.studentId, { message: "A pairing rule needs a child", path: ["studentId"] });
+export const confirmPreferenceBody = z.object({ ...preferenceFields, actor });
+export const editPreferenceBody = z.object({ ...preferenceFields, actor });
+export const rejectPreferenceBody = z.object({ reason: z.string().trim().max(500).nullable().optional(), actor });
 
 export const monthQuery = z.object({ month: isoMonth });
 export const auditQuery = z.object({ limit: z.coerce.number().int().min(1).max(500).default(100) });

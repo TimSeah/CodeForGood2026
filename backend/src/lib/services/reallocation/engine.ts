@@ -1,6 +1,7 @@
 import type { Absence, PlanStep, Session, Therapist } from "@/lib/types";
 import { affectedSessions, busyBySlot, isAbsent } from "./availability";
 import { minCostAssignment } from "./hungarian";
+import { activeRules, matchingRules, type PreferenceRule, ruleLabel } from "./preferences";
 import { ENGINE_CONFIG, type EngineConfig, type EngineStudent, type RankedCandidate, rankCandidates } from "./ranking";
 import { findSwapAlternative } from "./swaps";
 
@@ -14,6 +15,8 @@ export interface EngineInput {
   students: Map<number, EngineStudent>;
   /** sessionId → therapists that must not be proposed (e.g. the parent declined them). */
   exclusions?: Map<number, Set<number>>;
+  /** Admin-confirmed scheduling preferences. Only status "active" is applied (suggestions never are). */
+  preferences?: PreferenceRule[];
   config?: Partial<EngineConfig>;
 }
 
@@ -34,8 +37,10 @@ export interface EngineResult {
   swapAlternative: ProposedAssignment[] | null;
 }
 
-// Costs for the optimal assignment. Gaps are large enough that the rule order dominates distance (< 100 km in
-// Singapore) and one cancellation outweighs every child getting a blacklisted therapist.
+// Costs for the optimal assignment, lexicographic by design (a slot has ≤ ~30 sessions):
+//   cancellations  >>  soft-preference conflicts  >>  rule order (team … blacklisted)  >>  distance
+// One cancellation (1e10) outweighs every session breaking a soft preference (30 × 1e7); one soft conflict (1e7)
+// outweighs every session getting the worst ranking (30 × ~1e5). So soft preferences never cause a cancellation.
 const STEP_COST: Record<RankedCandidate["step"], number> = {
   team: 0,
   tier: 1_000,
@@ -44,8 +49,9 @@ const STEP_COST: Record<RankedCandidate["step"], number> = {
   blacklisted: 100_000,
 };
 const DISTANCE_UNKNOWN_KM = 50;
-const CANCEL_COST = 10_000_000;
-const IMPOSSIBLE = 1_000_000_000;
+const SOFT_PREFERENCE_COST = 10_000_000;
+const CANCEL_COST = 10_000_000_000;
+const IMPOSSIBLE = 10_000_000_000_000;
 
 export function proposeReallocations(input: EngineInput): EngineResult {
   const config = { ...ENGINE_CONFIG, ...input.config };
@@ -55,13 +61,36 @@ export function proposeReallocations(input: EngineInput): EngineResult {
 
   const affected = affectedSessions(input.sessions, absences);
 
-  const freeFor = (session: Session) =>
+  const preferences = activeRules(input.preferences);
+  const rulesFor = (therapistId: number, s: Session) => matchingRules(preferences, therapistId, s);
+
+  // Free for this session, ignoring preferences (used to explain which preferences shaped the choice).
+  const openFor = (session: Session) =>
     therapists.filter(
       (t) =>
         !busy[session.slot].has(t.id) &&
         !isAbsent(absences, t.id, session.slot) &&
         !exclusions.get(session.id)?.has(t.id),
     );
+  // Confirmed HARD preferences remove a candidate outright.
+  const freeFor = (session: Session) => openFor(session).filter((t) => rulesFor(t.id, session).hard.length === 0);
+
+  /** Rationale lines: which confirmed preferences kept someone out, or had to be overridden. */
+  const preferenceNotes = (s: Session, chosenId: number | null, candidates: Therapist[]) => {
+    const notes: string[] = [];
+    if (chosenId !== null) {
+      for (const r of rulesFor(chosenId, s).soft) {
+        notes.push(`⚠ Overrides ${ruleLabel(r)}: ${r.summary} — no other suitable therapist was free, and cancelling is worse`);
+      }
+    }
+    for (const t of candidates) {
+      if (t.id === chosenId) continue;
+      const { hard, soft } = rulesFor(t.id, s);
+      for (const r of hard) notes.push(`${ruleLabel(r)}: ${r.summary} — ${t.name} not considered`);
+      for (const r of soft) notes.push(`${ruleLabel(r)}: ${r.summary} — ${t.name} avoided`);
+    }
+    return notes;
+  };
 
   const base = (s: Session) => ({
     sessionId: s.id,
@@ -95,15 +124,27 @@ export function proposeReallocations(input: EngineInput): EngineResult {
       return pool.map((t) => byTherapist.get(t.id) ?? null); // null = excluded for this session
     });
     // Columns: every free therapist, then one "cancel" column per session.
-    const cost = ranked.map((cands) => [
-      ...cands.map((c) => (c ? STEP_COST[c.step] + (c.distanceKm ?? DISTANCE_UNKNOWN_KM) : IMPOSSIBLE)),
+    const cost = ranked.map((cands, i) => [
+      ...cands.map((c) =>
+        c
+          ? (rulesFor(c.therapistId, rows[i]).soft.length ? SOFT_PREFERENCE_COST : 0) +
+            STEP_COST[c.step] +
+            (c.distanceKm ?? DISTANCE_UNKNOWN_KM)
+          : IMPOSSIBLE,
+      ),
       ...rows.map(() => CANCEL_COST),
     ]);
     minCostAssignment(cost).forEach((col, i) => {
       const c = col < pool.length ? ranked[i][col] : null;
       if (!c) return; // cancel column → handled below
       busy[slot].add(c.therapistId);
-      decided.set(rows[i].id, { ...base(rows[i]), toTherapistId: c.therapistId, step: c.step, distanceKm: c.distanceKm, rationale: c.reasons });
+      decided.set(rows[i].id, {
+        ...base(rows[i]),
+        toTherapistId: c.therapistId,
+        step: c.step,
+        distanceKm: c.distanceKm,
+        rationale: [...c.reasons, ...preferenceNotes(rows[i], c.therapistId, openFor(rows[i]))],
+      });
     });
   }
 
@@ -120,6 +161,7 @@ export function proposeReallocations(input: EngineInput): EngineResult {
         hadOptions
           ? `Every free therapist in the ${s.slot} slot is covering another child`
           : `No therapist is free in the ${s.slot} slot`,
+        ...preferenceNotes(s, null, openFor(s)),
       ],
     });
   }

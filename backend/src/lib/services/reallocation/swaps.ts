@@ -1,6 +1,7 @@
 import type { Slot } from "@/lib/types";
 import { affectedSessions, isAbsent } from "./availability";
 import type { EngineInput, ProposedAssignment } from "./engine";
+import { matchingRules } from "./preferences";
 import { classify, type EngineConfig, STEP_RANK } from "./ranking";
 
 // Chain swaps: free therapist A covers child B, so B's therapist (B) can move to child C.
@@ -16,6 +17,11 @@ interface SwapInput extends EngineInput {
 
 export function findSwapAlternative(input: SwapInput): ProposedAssignment[] | null {
   const { config, primary, therapists, students, absences, sessions } = input;
+  // A swap must not create any conflict with a confirmed preference (hard or soft).
+  const conflicts = (therapistId: number, s: (typeof sessions)[number]) => {
+    const r = matchingRules(input.preferences, therapistId, s);
+    return r.hard.length + r.soft.length > 0;
+  };
   const exclusions = input.exclusions ?? new Map<number, Set<number>>();
   const byId = new Map(therapists.map((t) => [t.id, t]));
   const sessionById = new Map(sessions.map((s) => [s.id, s]));
@@ -51,7 +57,7 @@ export function findSwapAlternative(input: SwapInput): ProposedAssignment[] | nu
       if (affectedIds.has(sessionB.id) || movedSessions.has(sessionB.id)) continue;
       if (config.designatedOnlyForHomeSchool && (sessionB.location !== "clinic" || sessionC.location !== "clinic")) continue;
       const therapistB = byId.get(sessionB.therapistId)!;
-      if (exclusions.get(sessionC.id)?.has(therapistB.id)) continue;
+      if (exclusions.get(sessionC.id)?.has(therapistB.id) || conflicts(therapistB.id, sessionC)) continue;
 
       const bForC = classify(therapistB, childC);
       if (STEP_RANK[bForC.step] >= STEP_RANK[target.step] || STEP_RANK[bForC.step] > STEP_RANK.history) continue;
@@ -59,7 +65,7 @@ export function findSwapAlternative(input: SwapInput): ProposedAssignment[] | nu
       // Child B must keep a good (team/tier/history) match, so the swap doesn't just move the problem.
       const childB = students.get(sessionB.studentId)!;
       for (const a of freeA) {
-        if (exclusions.get(sessionB.id)?.has(a.id)) continue;
+        if (exclusions.get(sessionB.id)?.has(a.id) || conflicts(a.id, sessionB)) continue;
         const aForB = classify(a, childB);
         if (STEP_RANK[aForB.step] > STEP_RANK.history) continue;
         const better =

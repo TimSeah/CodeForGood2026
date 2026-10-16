@@ -1,4 +1,4 @@
-import type { ParentStatus, PlanStep, Rank } from "@/api/types";
+import type { ChangeReasonCode, ParentStatus, PlanStep, PreferenceStatus, Rank } from "@/api/types";
 
 export const RANK_LABEL: Record<Rank, string> = {
   SBT: "Senior Behavior Therapist",
@@ -8,6 +8,24 @@ export const RANK_LABEL: Record<Rank, string> = {
 };
 
 export const isSeniorRank = (r: Rank) => r === "SBT" || r === "LBT";
+
+/** Why an admin moved a proposed therapist off a session. Only the first two can become learned preferences. */
+export const REASON_OPTIONS: { code: ChangeReasonCode; label: string; learns: boolean }[] = [
+  { code: "child_incompatible", label: "Not compatible with this child", learns: true },
+  { code: "therapist_time_unavailable", label: "This time doesn't work for the therapist", learns: true },
+  { code: "better_fit", label: "Someone else is a better fit", learns: false },
+  { code: "one_off", label: "One-off (today only)", learns: false },
+  { code: "other", label: "Other", learns: false },
+];
+export const REASON_LABEL = Object.fromEntries(REASON_OPTIONS.map((o) => [o.code, o.label])) as Record<ChangeReasonCode, string>;
+
+export const PREFERENCE_STATUS_LABEL: Record<PreferenceStatus, string> = {
+  suggested: "Needs your answer",
+  active: "Active",
+  paused: "Paused",
+  rejected: "Not a rule",
+  removed: "Removed",
+};
 
 /** How a replacement was chosen — the agreed rule order (docs/plans/rescheduling.md). */
 export const STEP_LABEL: Record<PlanStep, string> = {

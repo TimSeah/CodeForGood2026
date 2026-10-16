@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import { invalidateDayData } from "@/api/invalidate";
-import type { AssignmentCandidate, GenerationMode, Notification, NotifyMode, Plan, PlanAssignment } from "@/api/types";
+import type { AssignmentCandidate, ChangeReason, GenerationMode, Notification, NotifyMode, Plan, PlanAssignment } from "@/api/types";
 
 export const usePlans = (date: string) =>
   useQuery({ queryKey: ["plans", date], queryFn: () => api.get<Plan[]>(`/plans?date=${date}`), refetchInterval: 30_000 });
@@ -32,15 +32,17 @@ export const useGeneratePlan = () =>
     api.post<Plan | null>("/plans/generate", { date, mode, prompt }),
   );
 
+/** Admin picks a different therapist. `reason` (why the proposed therapist was moved off) feeds the preference memory. */
 export const useEditAssignment = () =>
-  useDayMutation(({ planId, assignmentId, toTherapistId }: { planId: number; assignmentId: number; toTherapistId: number | null }) =>
-    api.patch<Plan>(`/plans/${planId}/assignments/${assignmentId}`, { toTherapistId }),
+  useDayMutation(
+    ({ planId, assignmentId, toTherapistId, reason }: { planId: number; assignmentId: number; toTherapistId: number | null; reason?: ChangeReason | null }) =>
+      api.patch<Plan>(`/plans/${planId}/assignments/${assignmentId}`, { toTherapistId, reason }),
   );
 
 /** Reject one row's therapist; the backend re-runs that row alone with the therapists still free. */
 export const useRejectAssignment = () =>
-  useDayMutation(({ planId, assignmentId }: { planId: number; assignmentId: number }) =>
-    api.post<Plan>(`/plans/${planId}/assignments/${assignmentId}/reject`, {}),
+  useDayMutation(({ planId, assignmentId, reason }: { planId: number; assignmentId: number; reason?: ChangeReason | null }) =>
+    api.post<Plan>(`/plans/${planId}/assignments/${assignmentId}/reject`, { reason }),
   );
 
 /** Undo the latest row reject (restores the previous therapist). */

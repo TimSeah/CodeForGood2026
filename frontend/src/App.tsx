@@ -5,6 +5,7 @@ import { RepliesPage } from "@/features/approval/RepliesPage";
 import { AuditPage } from "@/features/audit/AuditPage";
 import { DisruptionsPage } from "@/features/disruptions/DisruptionsPage";
 import { LogsPage } from "@/features/logs/LogsPage";
+import { PreferencesPage } from "@/features/preferences/PreferencesPage";
 import { SchedulePage } from "@/features/schedule/SchedulePage";
 import { VideoReviewPage } from "@/features/video-review/VideoReviewPage";
 
@@ -16,6 +17,7 @@ export default function App() {
         <Route index element={<DisruptionsPage />} />
         <Route path="approval" element={<ApprovalPage />} />
         <Route path="replies" element={<RepliesPage />} />
+        <Route path="preferences" element={<PreferencesPage />} />
         <Route path="schedule" element={<SchedulePage />} />
         <Route path="logs" element={<LogsPage />} />
         <Route path="video-review" element={<VideoReviewPage />} />
