@@ -1,12 +1,15 @@
 import { useState } from "react";
-import type { SessionLog } from "@/api/types";
-import { Badge, Button, Card, DateInput, inputClass, Modal, QueryState } from "@/components/ui";
+import type { Attendance, SessionLog } from "@/api/types";
+import { Badge, Button, Card, DateInput, inputClass, LinkButton, Modal, PageHeader, QueryState, Tabs, type Tone } from "@/components/ui";
+import { Icon } from "@/components/icons";
 import { useStudents, useTherapists } from "@/features/reference/api";
 import { useSessions } from "@/features/schedule/api";
 import { useSelectedDate } from "@/hooks/useSelectedDate";
 import { formatCaseDate, formatTime } from "@/lib/format";
 import { type LogFilter, logPdfUrl, useDeleteLog, useSessionLogs } from "./api";
 import { LogForm } from "./LogForm";
+
+const ATTENDANCE_TONE: Record<Attendance, Tone> = { present: "success", late: "warning", absent: "danger", cancelled: "danger" };
 
 /**
  * Therapist portal: take attendance and log what happened in each session. Logs show who actually took which
@@ -18,27 +21,34 @@ export function LogsPage() {
   const [therapistId, setTherapistId] = useState<number | "">("");
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold">Session logs</h1>
-        <div className="flex items-center gap-2">
-          <select
-            className={inputClass}
-            value={therapistId}
-            onChange={(e) => setTherapistId(e.target.value ? Number(e.target.value) : "")}
-            aria-label="I am"
-          >
-            <option value="">I am… (therapist)</option>
-            {therapists.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-          <DateInput value={date} onChange={setDate} />
-        </div>
-      </div>
-      {therapistId !== "" && <MySessions date={date} therapistId={therapistId} />}
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Therapist portal"
+        title="Session logs"
+        actions={
+          <>
+            <label className="flex items-center gap-2 text-sm font-semibold text-ink-soft">
+              I am
+              <select className={inputClass} value={therapistId} onChange={(e) => setTherapistId(e.target.value ? Number(e.target.value) : "")}>
+                <option value="">Choose a therapist…</option>
+                {therapists.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <DateInput value={date} onChange={setDate} />
+          </>
+        }
+      />
+      {therapistId === "" ? (
+        <p className="rounded-xl border border-dashed border-[#C9C6BB] px-4 py-3 text-sm text-muted">
+          Choose who you are (top right) to see and log your sessions for this day.
+        </p>
+      ) : (
+        <MySessions date={date} therapistId={therapistId} />
+      )}
       <LogTable date={date} therapistId={therapistId} />
     </div>
   );
@@ -52,38 +62,44 @@ function MySessions({ date, therapistId }: { date: string; therapistId: number }
   const mine = sessions.filter((s) => s.therapistId === therapistId);
 
   return (
-    <Card title={`My sessions — ${formatCaseDate(date)}`}>
+    <section className="space-y-3">
+      <h2 className="text-[17px] font-bold">My sessions — {formatCaseDate(date)}</h2>
       <QueryState isLoading={isLoading} error={error} isEmpty={mine.length === 0} emptyText="No sessions scheduled for you today." />
-      <ul className="divide-y divide-slate-100">
+      <ul className="grid items-start gap-4 lg:grid-cols-2">
         {mine.map((s) => {
           const log = logs.find((l) => l.sessionId === s.id);
+          const isOpen = open === s.id;
           return (
-            <li key={s.id} className="py-2 text-sm">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span>
-                  <Badge>{s.slot}</Badge> {formatTime(s.startTime)}–{formatTime(s.endTime)} · <strong>{s.studentName}</strong> ·{" "}
-                  <span className="capitalize">{s.location}</span>
-                  {s.originalTherapistId !== null && s.originalTherapistId !== therapistId && (
-                    <span className="ml-1">
-                      <Badge tone="info">covering</Badge>
-                    </span>
-                  )}
-                  {s.status === "cancelled" && (
-                    <span className="ml-1">
-                      <Badge tone="danger">cancelled</Badge>
-                    </span>
-                  )}
-                </span>
+            <li
+              key={s.id}
+              className={`flex flex-col gap-4 rounded-2xl border bg-white px-5 py-4 ${isOpen ? "border-brand ring-1 ring-brand lg:col-span-2" : "border-line"} ${s.status === "cancelled" ? "bg-subtle" : ""}`}
+            >
+              <div className="flex flex-wrap items-center gap-3.5">
+                <div className={`shrink-0 rounded-[10px] px-2.5 py-1.5 text-center ${isOpen ? "bg-brand-soft text-brand" : "bg-sunk text-ink-soft"}`}>
+                  <div className="text-[11px] font-extrabold">{s.slot}</div>
+                  <div className="text-[15px] font-extrabold">{formatTime(s.startTime).replace(/ (AM|PM)$/, "")}</div>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-base font-extrabold">{s.studentName}</div>
+                  <div className="text-[13px] text-muted">
+                    {formatTime(s.startTime)} – {formatTime(s.endTime)} · <span className="capitalize">{s.location}</span>
+                  </div>
+                </div>
+                {s.originalTherapistId !== null && s.originalTherapistId !== therapistId && <Badge tone="info">Covering</Badge>}
+                {s.status === "cancelled" && <Badge tone="danger">Cancelled</Badge>}
                 {log ? (
-                  <Badge tone="success">Logged · {log.attendance}</Badge>
+                  <Badge tone="success">
+                    <Icon name="check" size={14} strokeWidth={2.6} />
+                    Logged · {log.attendance}
+                  </Badge>
                 ) : (
-                  <Button variant="secondary" onClick={() => setOpen(open === s.id ? null : s.id)}>
-                    {open === s.id ? "Close" : "Log session"}
+                  <Button variant={isOpen ? "secondary" : "primary"} onClick={() => setOpen(isOpen ? null : s.id)}>
+                    {isOpen ? "Close" : "Log session"}
                   </Button>
                 )}
               </div>
-              {open === s.id && (
-                <div className="mt-3 rounded-md border border-slate-200 p-3">
+              {isOpen && (
+                <div className="border-t border-line-soft pt-4">
                   <LogForm
                     preset={{ sessionId: s.id, date, slot: s.slot, studentId: s.studentId, therapistId }}
                     onDone={() => setOpen(null)}
@@ -94,7 +110,7 @@ function MySessions({ date, therapistId }: { date: string; therapistId: number }
           );
         })}
       </ul>
-    </Card>
+    </section>
   );
 }
 
@@ -114,22 +130,24 @@ function LogTable({ date, therapistId }: { date: string; therapistId: number | "
   };
   const { data = [], isLoading, error } = useSessionLogs(filter);
   const teams = new Map(students.map((s) => [s.id, new Set(s.teamTherapistIds)]));
+  const grid = "md:grid md:grid-cols-[150px_110px_150px_110px_minmax(180px,1fr)_170px] md:gap-3.5 md:items-start";
 
   return (
     <Card
-      title="Logs"
+      title={therapistId === "" ? "All logs" : "My logs"}
+      flush
       actions={
         <div className="flex flex-wrap items-center gap-2">
-          <select className={inputClass} value={scope} onChange={(e) => setScope(e.target.value as "day" | "all")} aria-label="Dates">
-            <option value="day">This date</option>
-            <option value="all">All dates</option>
-          </select>
-          <select
-            className={inputClass}
-            value={studentId}
-            onChange={(e) => setStudentId(e.target.value ? Number(e.target.value) : "")}
-            aria-label="Child"
-          >
+          <Tabs
+            label="Dates"
+            value={scope}
+            onChange={setScope}
+            tabs={[
+              { value: "day", label: "This date" },
+              { value: "all", label: "All dates" },
+            ]}
+          />
+          <select className={inputClass} value={studentId} onChange={(e) => setStudentId(e.target.value ? Number(e.target.value) : "")} aria-label="Child">
             <option value="">All children</option>
             {students.map((s) => (
               <option key={s.id} value={s.id}>
@@ -137,63 +155,70 @@ function LogTable({ date, therapistId }: { date: string; therapistId: number | "
               </option>
             ))}
           </select>
-          <Button variant="secondary" onClick={() => setAdding(true)}>
-            + New log
+          <Button onClick={() => setAdding(true)}>
+            <Icon name="plus" size={16} strokeWidth={2.4} />
+            New log
           </Button>
         </div>
       }
     >
-      <QueryState isLoading={isLoading} error={error} isEmpty={data.length === 0} emptyText="No logs match these filters." />
+      <div className="px-5 py-3 empty:hidden">
+        <QueryState isLoading={isLoading} error={error} isEmpty={data.length === 0} emptyText="No logs match these filters." />
+      </div>
       {data.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-left text-sm">
-            <thead className="text-xs text-slate-500">
-              <tr>
-                <th className="py-2">Date</th>
-                <th>Child</th>
-                <th>Therapist</th>
-                <th>Attendance</th>
-                <th>Summary</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {data.map((l) => (
-                <tr key={l.id} className="align-top">
-                  <td className="py-2 whitespace-nowrap">
-                    {formatCaseDate(l.date)} <Badge>{l.slot}</Badge>
-                  </td>
-                  <td>{l.studentName}</td>
-                  <td>
-                    {l.therapistName}
-                    {teams.size > 0 && !teams.get(l.studentId)?.has(l.therapistId) && (
-                      <span className="ml-1">
-                        <Badge tone="info">cover</Badge>
-                      </span>
-                    )}
-                  </td>
-                  <td className="capitalize">{l.attendance}</td>
-                  <td className="max-w-md text-slate-600">{l.summary ?? "—"}</td>
-                  <td className="whitespace-nowrap text-right text-xs">
-                    <a className="text-sky-700 underline" href={logPdfUrl(l.id)} target="_blank" rel="noreferrer">
-                      PDF
-                    </a>{" "}
-                    <button className="ml-2 text-sky-700 underline" onClick={() => setEditing(l)}>
-                      Edit
-                    </button>
-                    <button
-                      className="ml-2 text-rose-700 underline"
-                      onClick={() => window.confirm(`Delete the log for ${l.studentName} on ${l.date}?`) && del.mutate(l.id)}
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className={`hidden bg-subtle px-5 py-2.5 text-xs font-bold tracking-wide text-muted uppercase ${grid}`}>
+            <span>Date</span>
+            <span>Child</span>
+            <span>Therapist</span>
+            <span>Attendance</span>
+            <span>Summary</span>
+            <span />
+          </div>
+          <ul>
+            {data.map((l) => (
+              <li key={l.id} className={`flex flex-col gap-1.5 border-t border-line-soft px-5 py-3.5 text-sm ${grid}`}>
+                <div className="flex items-center gap-1.5 whitespace-nowrap">
+                  {formatCaseDate(l.date)} <Badge>{l.slot}</Badge>
+                </div>
+                <div className="font-bold">{l.studentName}</div>
+                <div>
+                  {l.therapistName}
+                  {teams.size > 0 && !teams.get(l.studentId)?.has(l.therapistId) && (
+                    <span className="ml-1.5">
+                      <Badge tone="info">cover</Badge>
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <Badge tone={ATTENDANCE_TONE[l.attendance]}>
+                    <span className="capitalize">{l.attendance}</span>
+                  </Badge>
+                </div>
+                <div className="text-ink-soft">{l.summary ?? "—"}</div>
+                <div className="flex gap-0.5 md:justify-end">
+                  <a
+                    className="rounded-md px-1.5 py-1 text-[13px] font-bold text-brand underline-offset-3 hover:underline"
+                    href={logPdfUrl(l.id)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    PDF
+                  </a>
+                  <LinkButton onClick={() => setEditing(l)}>Edit</LinkButton>
+                  <LinkButton
+                    tone="danger"
+                    onClick={() => window.confirm(`Delete the log for ${l.studentName} on ${l.date}?`) && del.mutate(l.id)}
+                  >
+                    Delete
+                  </LinkButton>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
+      {del.error && <p className="px-5 pb-3 text-sm font-semibold text-bad">{del.error.message}</p>}
       {editing && (
         <Modal title={`Edit log — ${editing.studentName}, ${editing.date} ${editing.slot}`} onClose={() => setEditing(null)}>
           <LogForm existing={editing} onDone={() => setEditing(null)} />

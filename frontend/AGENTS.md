@@ -10,15 +10,16 @@ Read the root `AGENTS.md` first.
 frontend/src/
 ├── main.tsx                  Providers (React Query, Router). Rarely touched.
 ├── App.tsx                   Route table. Add new pages here.
-├── index.css                 Tailwind import + tiny global styles
+├── index.css                 Tailwind import + theme tokens (bg-brand, text-muted, border-line, …)
 ├── api/
 │   ├── client.ts             fetch wrapper: api.get/post/patch/delete, unwraps { data } / throws ApiError
 │   ├── invalidate.ts         invalidateDayData(): refetch everything day-scoped after a write
 │   └── types.ts              MIRROR of backend/src/lib/types.ts (backend is the source of truth)
 ├── components/               Shared, presentational, feature-agnostic
-│   ├── AppLayout.tsx         Header + nav + <Outlet/>. Add nav links here.
+│   ├── AppLayout.tsx         Sidebar nav + <Outlet/>. Add nav links here.
+│   ├── icons.tsx             Inline stroke icons (<Icon name=…/>)
 │   ├── MonthCalendar.tsx     Sun–Sat month grid (like the per-person Excel sheets)
-│   └── ui.tsx                Card, Badge, Button, DateInput, Tabs, Modal, QueryState, inputClass
+│   └── ui.tsx                PageHeader, Card, Badge, Button, LinkButton, DateInput, Field, Tabs, Callout, Avatar, Modal, QueryState, inputClass
 ├── hooks/                    Shared hooks (e.g. useSelectedDate: date lives in ?date= URL param)
 ├── lib/                      Pure helpers (formatting, case-calendar weekdays, labels). No React.
 └── features/<feature>/       One folder per domain area
@@ -33,7 +34,7 @@ Current features (see `docs/plans/rescheduling.md` for the workflow behind them)
 | `disruptions` | `/` | 7 AM view: WhatsApp reports (therapist / parent), who's away, link to the draft plan |
 | `intake` | — | WhatsApp report panels, unmatched-name resolution, manual report form, 30 s bot sync |
 | `absences` | — | Who's away + planned-leave form |
-| `approval` | `/approval` | Draft plan (+ swap alternative), editing with validation, approve dialog, parent replies, outbox, calendars |
+| `approval` | `/approval`, `/replies` | Draft plan (+ swap alternative), editing with validation, approve dialog, calendars · parent replies + outbox |
 | `schedule` | `/schedule` | Monthly MWF/TT allocation table + daily view |
 | `logs` | `/logs` | Therapist portal: today's sessions, attendance + session log CRUD, PDF |
 | `audit` | `/audit` | Audit trail |
@@ -53,7 +54,7 @@ Current features (see `docs/plans/rescheduling.md` for the workflow behind them)
   move it to `components/`.
 - **Dates:** July 2031 uses the case study's fictional calendar — use `weekdayIndex` / `formatCaseDate` from
   `lib/format.ts`, never `new Date(date).getDay()`.
-- **Styling: Tailwind utility classes only.** No CSS modules, no styled-components, no UI kit unless the team agrees.
+- **Styling: Tailwind utility classes only, using the theme tokens in `index.css`** (not raw slate/rose/… palettes). No CSS modules, no styled-components, no UI kit unless the team agrees.
   Reuse `components/ui.tsx` before inventing new buttons/cards.
 - **Every query result handles loading, error and empty states** (use `<QueryState/>`).
 - **Shared page state goes in the URL** (like `?date=`), not in global stores. No Redux/Zustand.
