@@ -1,7 +1,7 @@
 # AGENTS.md (repo root)
 
 Instructions for AI coding agents (Claude Code, Codex, Cursor, Copilot, …) and humans working in this repo.
-**Read this file, then the `AGENTS.md` in the folder you are changing** (`backend/AGENTS.md` or `frontend/AGENTS.md`).
+**Read this file, then the `AGENTS.md` in the folder you are changing, if present** (`backend/AGENTS.md` or `frontend/AGENTS.md`).
 
 ## What we're building
 
@@ -42,11 +42,14 @@ documents. Seed data follows the documents. Don't "fix" weekdays with `Date#getD
 ├── AGENTS.md / CONTRIBUTING.md   ← you are here (repo-wide rules)
 ├── backend/                      Next.js 16 (App Router), API routes only, SQLite via better-sqlite3 → :3001
 ├── frontend/                     React 19 + Vite + TypeScript + Tailwind v4 + React Query → :5173
+├── bot/                          WhatsApp absence intake, local OCR, separate SQLite database → :3000
 ├── docs/                         Challenge brief, notes, and source data (docs/data/*.xlsx, *.docx)
 └── .claude/launch.json           Dev-server definitions (backend, frontend)
 ```
 
 The frontend calls `/api/*`; Vite proxies that to `http://localhost:3001`. No CORS, no auth (local prototype).
+The bot collects reports separately; it does not yet send absences to the backend API.
+For bot changes, run `npm test` from `bot/` (Node 24+).
 
 ## Running everything
 
@@ -57,7 +60,7 @@ cd frontend && npm install && npm run dev                          # terminal 2 
 
 ## Cross-cutting rules for agents
 
-- **Stay in your lane.** A task touches `backend/` or `frontend/` unless it is explicitly an API contract change.
+- **Stay in your lane.** A task touches `backend/`, `frontend/`, or `bot/` unless it is explicitly an API contract change.
   Never edit both sides of an API change without updating the types on both sides (see below).
 - **API contract = `backend/src/lib/types.ts`.** `frontend/src/api/types.ts` is a hand-kept mirror. Change the
   backend file first, then copy the change to the frontend file in the same commit.

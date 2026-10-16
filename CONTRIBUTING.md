@@ -6,7 +6,7 @@ work in parallel without stepping on each other. Folder-specific guides:
 
 ## Setup
 
-Requirements: **Node 22+** and npm. Python 3 is only needed to regenerate seed data from Excel.
+Requirements: **Node 22+** and npm for the web app; **Node 24+** for the WhatsApp bot. Python 3 is only needed to regenerate seed data from Excel.
 
 ```bash
 cd backend && npm install && npm run db:reset && npm run dev
@@ -31,6 +31,7 @@ Open http://localhost:5173. Pick 11 July 2031 (the default) → **Generate propo
 | --- | --- |
 | backend | `npm run typecheck && npm test && npm run build` |
 | frontend | `npm run build` (includes typecheck) |
+| bot | `npm test` (run from `bot/`) |
 
 - If you changed the DB schema: you added a **new** migration file (never edited an old one) and `npm run db:reset` works.
 - If you changed an API shape: `backend/src/lib/types.ts` and `frontend/src/api/types.ts` both updated.
