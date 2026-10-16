@@ -7,6 +7,7 @@ const NAV: { to: string; label: string; icon: IconName }[] = [
   { to: "/replies", label: "Parent replies", icon: "chat" },
   { to: "/schedule", label: "Schedule", icon: "calendar" },
   { to: "/logs", label: "Session logs", icon: "file" },
+  { to: "/video-review", label: "Video review", icon: "video" },
   { to: "/audit", label: "Audit trail", icon: "clock" },
 ];
 

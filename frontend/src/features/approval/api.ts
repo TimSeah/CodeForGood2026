@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import { invalidateDayData } from "@/api/invalidate";
-import type { AssignmentCandidate, Notification, NotifyMode, Plan, PlanAssignment } from "@/api/types";
+import type { AssignmentCandidate, GenerationMode, Notification, NotifyMode, Plan, PlanAssignment } from "@/api/types";
 
 export const usePlans = (date: string) =>
   useQuery({ queryKey: ["plans", date], queryFn: () => api.get<Plan[]>(`/plans?date=${date}`), refetchInterval: 30_000 });
@@ -27,7 +27,10 @@ function useDayMutation<TVars, TResult>(fn: (vars: TVars) => Promise<TResult>) {
   });
 }
 
-export const useGeneratePlan = () => useDayMutation((date: string) => api.post<Plan | null>("/plans/generate", { date }));
+export const useGeneratePlan = () =>
+  useDayMutation(({ date, mode, prompt }: { date: string; mode: GenerationMode; prompt?: string }) =>
+    api.post<Plan | null>("/plans/generate", { date, mode, prompt }),
+  );
 
 export const useEditAssignment = () =>
   useDayMutation(({ planId, assignmentId, toTherapistId }: { planId: number; assignmentId: number; toTherapistId: number | null }) =>

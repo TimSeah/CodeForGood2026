@@ -98,6 +98,7 @@ export interface BotReport {
 
 export type PlanKind = "primary" | "swap_alternative" | "replan";
 export type PlanStatus = "draft" | "approved" | "rejected" | "superseded";
+export type GenerationMode = "rules" | "agent";
 export type NotifyMode = "whatsapp" | "manual";
 /** Which matching rule picked the therapist (see docs/plans/rescheduling.md). */
 export type PlanStep = "team" | "tier" | "history" | "any" | "blacklisted" | "swap" | "cancel" | "manual";
@@ -208,6 +209,40 @@ export interface SessionLog {
   goals: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// ---- Session video review -----------------------------------------------------------------------
+
+export type VideoReviewStatus = "uploading" | "uploaded" | "processing" | "completed" | "failed";
+export type VideoMomentType = "possible_escalation" | "recovery" | "notable_progress";
+
+export interface VideoReviewClip {
+  id: number;
+  startSeconds: number;
+  endSeconds: number;
+  eventType: VideoMomentType;
+  caption: string;
+  confidence: number;
+  videoUrl: string;
+}
+
+export interface VideoReview {
+  id: number;
+  originalFilename: string;
+  contentType: string;
+  sizeBytes: number;
+  status: VideoReviewStatus;
+  summary: string | null;
+  errorMessage: string | null;
+  videoUrl: string | null;
+  clips: VideoReviewClip[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateVideoReviewResult {
+  review: VideoReview;
+  uploadUrl: string;
 }
 
 // ---- Monthly allocation (Schedule page) ----------------------------------------------------------
