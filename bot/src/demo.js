@@ -131,7 +131,7 @@ function startTunnel() {
   if (stopping) return;
   const currentGeneration = ++generation;
   const args = fixedUrl ? ['tunnel', 'run'] :
-    ['tunnel', '--url', `http://127.0.0.1:${port}`, '--protocol', 'http2'];
+    ['tunnel', '--url', `http://127.0.0.1:${port}`, '--protocol', 'auto'];
   const child = spawn(cloudflared, args, {
     cwd: botDir,
     env: { ...process.env, ...(tunnelToken ? { TUNNEL_TOKEN: tunnelToken } : {}) },

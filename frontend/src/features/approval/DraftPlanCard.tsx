@@ -94,7 +94,7 @@ export function DraftPlanCard({ plan, title }: { plan: Plan; title: string }) {
           <ol className="mt-3 space-y-2.5 text-sm text-ink-soft">
             {[
               <>Parents are asked to reply <strong>YES</strong> or <strong>NO</strong>. No reply by 15 minutes before the session means it’s cancelled.</>,
-              <>Substitute therapists get a summary of the child’s last session, with that session’s log as a PDF.</>,
+              <>Substitute therapists get a text handover. A PDF is optional when using an approved document template.</>,
               <>If you choose not to send, record each parent’s answer on the Parent replies page yourself.</>,
             ].map((text, i) => (
               <li key={i} className="flex gap-2.5">
@@ -104,7 +104,10 @@ export function DraftPlanCard({ plan, title }: { plan: Plan; title: string }) {
             ))}
           </ol>
           <div className="mt-4">
-            <Callout tone="warning">WhatsApp sending isn’t connected yet: messages are saved to the outbox instead of being sent.</Callout>
+            <Callout tone="warning">
+              Approve &amp; send queues real WhatsApp delivery attempts. For fictional contacts, choose “No, I’ll contact them”.
+              Standard text requires a recent message from each recipient; otherwise approved templates are needed.
+            </Callout>
           </div>
           <div className="mt-5 flex flex-wrap justify-end gap-2">
             <Button variant="secondary" onClick={() => doApprove("manual")} disabled={approve.isPending}>
