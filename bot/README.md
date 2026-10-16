@@ -61,7 +61,7 @@ Stop-ScheduledTask -TaskName 'Team18 WhatsApp Demo Bot'
 Start-ScheduledTask -TaskName 'Team18 WhatsApp Demo Bot'
 ```
 
-Wait until the log says `Webhook connected:` before testing. The task's Quick Tunnel URL changes on restart, and the launcher updates Meta automatically.
+Wait until the log says `Webhook connected:` before testing. The task's Quick Tunnel URL changes on restart, and the launcher updates Meta automatically. Quick Tunnel selects QUIC or HTTP/2 according to network availability; if registration keeps reporting that the public webhook is unreachable, check outbound Cloudflare Tunnel connectivity on port 7844 (UDP or TCP).
 
 `npm.cmd run export` prints JSON with `absences` (phone numbers, names, dates, day part, MC-attached flag and review status) and `failedReplies` needing operator follow-up. Treat this as sensitive data: restrict filesystem access, export only to an approved admin workflow, verify the sender's identity and claimed child/therapist against the official roster, and have staff review the original MC in the existing WhatsApp conversation if required. The bot stores an MC media ID and SHA-256 digest for traceability, **not the document**; media availability on Meta is limited, so an approved separate evidence-retention process is necessary if MC copies must be kept. Keep the database on an access-controlled, encrypted volume, define a retention/deletion policy, and protect access tokens and server logs. The backend can generate a *draft* schedule change from a matching report, but staff must verify the reporter and MC before approving or notifying anyone.
 

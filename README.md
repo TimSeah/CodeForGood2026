@@ -17,10 +17,11 @@ npm run setup
 npm run dev
 ```
 
-Run `npm run setup` once after cloning. After that, `npm run dev` starts the backend and frontend together; press
-Ctrl+C to stop both. Open http://localhost:5173: the 11 July 2031 case scenario is pre-loaded as WhatsApp reports.
+Run `npm run setup` only on a fresh clone: it runs `db:reset` and **deletes existing backend records**. After that, `npm run dev` starts the backend and frontend together; press
+Ctrl+C to stop both. Open http://localhost:5173: the 11 July 2031 case scenario is pre-loaded as simulated WhatsApp reports.
 Review the draft on **Approval**, approve it, and try parent replies. The full workflow is in
 [docs/plans/rescheduling.md](docs/plans/rescheduling.md).
+For an existing POC database, do not re-run setup; install missing dependencies separately and start the servers.
 
 ## Environment configuration
 
@@ -53,8 +54,24 @@ frames for OpenAI analysis, then uses its bundled FFmpeg binary to create the lo
 
 ## WhatsApp absence intake bot
 
-The [bot](bot/README.md) collects therapist and patient absences through WhatsApp. It uses a separate database and
-does not yet submit reports to the web app's absence API. See its README for the conversation flow, setup, and tests.
+The [bot](bot/README.md) collects therapist and patient absences through WhatsApp. It uses a separate database;
+the backend imports confirmed reports, creates draft plans, and queues notifications after approval. Its README
+explains the local bot connection and the session-only POC mode, which requires recipients to message the bot
+before standard text can be sent without approved Meta templates.
+
+For a recording with the richer fictional July 2031 scenario, use a separate database instead of resetting
+your live WhatsApp POC. From `backend/`, set `DATABASE_PATH=data/demo-video.db` before running
+`npm.cmd run db:reset` **only when that file does not already exist**. Start the backend with the same
+`DATABASE_PATH` and `BOT_DB_PATH=data/demo-video-bot.sqlite` to keep live bot reports out of this manual
+case study. The frontend still runs on port 5173; open `/?date=2031-07-11` for the preloaded draft, or
+`/?date=2031-07-12` to enter a new report by hand. Seeded phone numbers are fictional: choose
+**No, I’ll contact them** if approving a case-study plan, not **Approve & send messages**.
+For a quick walkthrough, match the preloaded report named **Jacq** to **Jacqueline** on 11 July,
+review the updated draft, approve it manually, then record an **Accepted** reply. To create a
+report yourself, switch to 12 July and add **Therapist → Amelia → Full day → Until 2031-07-12**
+with MC unchecked; her two scheduled sessions should generate a new draft for that day.
+To return to the live October 2026 WhatsApp POC, restore `DATABASE_PATH=data/app.db` and
+`BOT_DB_PATH=../bot/absences.sqlite` in the ignored `backend/.env.local`, then restart the backend.
 
 **Before contributing, read [AGENTS.md](AGENTS.md) and [CONTRIBUTING.md](CONTRIBUTING.md)**, plus any instructions
 in the folder you're working in.
