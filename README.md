@@ -1,4 +1,29 @@
-# Autism Partnership absence intake bot
+# Team-18: Therapist Reallocation (Autism Partnership, CFG 2026)
+
+Local web app for rapidly reallocating therapist sessions when staff are absent: report absences, let the
+engine propose replacements (with reasons), approve or reject them, and keep a full audit trail.
+
+| Folder | Stack | Port |
+| --- | --- | --- |
+| [backend/](backend) | Next.js 16 API routes, SQLite (better-sqlite3), zod, vitest | 3001 |
+| [frontend/](frontend) | React 19, Vite, TypeScript, Tailwind v4, React Query | 5173 |
+| [src/](src) | WhatsApp Cloud API absence-intake bot, local OCR, SQLite | 3000 |
+| [docs/](docs) | Challenge brief, notes, sample data | |
+
+## Web app quick start (Node 22+)
+
+```bash
+cd backend && npm install && npm run db:reset && npm run dev
+cd frontend && npm install && npm run dev
+```
+
+Then open http://localhost:5173 and click **Generate proposals** for 11 July 2031 (the case scenario).
+The bot below uses a separate database and does not yet submit reports to the web app's absence API.
+
+**Before contributing, read [AGENTS.md](AGENTS.md) and [CONTRIBUTING.md](CONTRIBUTING.md)**, plus the ones in
+the folder you're working in.
+
+## WhatsApp absence intake bot
 
 This is the WhatsApp **data collection** component of the [Autism Partnership challenge](docs/AutismPartnership-Challenge-Statement-CFG2026.pdf). Unexpected absences must be reported by 7:00 a.m.; operations have until 7:30 a.m. to publish a revised schedule. A therapist absence or a child's absence can affect one-to-one care, so the bot collects structured reports quickly, but **does not reschedule, approve an MC, or notify families about a change**. Those decisions remain with admin and clinical supervisors. See [challenge notes](docs/challenge_notes.md) for the wider team workflow.
 
