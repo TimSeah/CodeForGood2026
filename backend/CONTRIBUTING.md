@@ -16,7 +16,7 @@ npm run dev                    # http://localhost:3001/api/health
 ## Conventions
 
 - TypeScript strict. Import from `@/…` (maps to `src/`), not long relative paths.
-- File names: `kebab-case.ts` or a single lowercase word; route folders follow URL paths (`api/reallocations/[id]`).
+- File names: `kebab-case.ts` or a single lowercase word; route folders follow URL paths (`api/plans/[id]/approve`).
 - DB columns `snake_case`; TypeScript/JSON fields `camelCase`. Repositories do the mapping.
 - Every route: `export const GET = handle(...)`, validate with zod, return `ok(data)` (or `ok(data, 201)` on create).
 - Every write: inside a service, inside a transaction, with `logAudit({ actor, action: "<entity>.<verb>", ... })`.
@@ -38,5 +38,5 @@ npm run dev                    # http://localhost:3001/api/health
 - [ ] Manually hit the endpoint (browser, curl, or via the frontend)
 
 ```bash
-curl -X POST localhost:3001/api/reallocations/propose -H "content-type: application/json" -d '{"date":"2031-07-11"}'
+curl -X POST localhost:3001/api/plans/generate -H "content-type: application/json" -d '{"date":"2031-07-11"}'
 ```

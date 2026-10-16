@@ -2,7 +2,9 @@ import { NavLink, Outlet, useLocation } from "react-router";
 
 const NAV = [
   { to: "/", label: "Disruptions" },
+  { to: "/approval", label: "Approval" },
   { to: "/schedule", label: "Schedule" },
+  { to: "/logs", label: "Session logs" },
   { to: "/audit", label: "Audit log" },
 ];
 
@@ -12,9 +14,9 @@ export function AppLayout() {
   return (
     <div className="min-h-screen">
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-6xl items-center gap-6 px-4 py-3">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
           <span className="font-semibold">Therapist Reallocation</span>
-          <nav className="flex gap-1">
+          <nav className="flex flex-wrap gap-1">
             {NAV.map((n) => (
               <NavLink
                 key={n.to}
@@ -30,7 +32,7 @@ export function AppLayout() {
           </nav>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-4 py-6">
+      <main className="mx-auto max-w-7xl px-4 py-6">
         <Outlet />
       </main>
     </div>
