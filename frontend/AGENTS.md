@@ -34,7 +34,8 @@ Current features (see `docs/plans/rescheduling.md` for the workflow behind them)
 | `disruptions` | `/` | 7 AM view: WhatsApp reports (therapist / parent), who's away, link to the draft plan |
 | `intake` | — | WhatsApp report panels, unmatched-name resolution, manual report form, 30 s bot sync |
 | `absences` | — | Who's away + planned-leave form |
-| `approval` | `/approval`, `/replies` | Draft plan (+ swap alternative), editing with validation, approve dialog, calendars · parent replies + outbox |
+| `approval` | `/approval`, `/replies` | Draft plan (+ swap alternative), editing with validation + change reasons, approve dialog, calendars · parent replies + outbox |
+| `preferences` | `/preferences` | Scheduling rules: suggestions to confirm/reject (also on the Approval page via `SuggestionsPanel`), active/paused rules, edit/pause/remove, add rule |
 | `schedule` | `/schedule` | Monthly MWF/TT allocation table + daily view |
 | `logs` | `/logs` | Therapist portal: today's sessions, attendance + session log CRUD, PDF |
 | `audit` | `/audit` | Audit trail |

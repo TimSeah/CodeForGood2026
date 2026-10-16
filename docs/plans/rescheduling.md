@@ -67,6 +67,9 @@ not rostered off) and not already booked in that slot. Candidates are ranked by 
   **minimise cancellations**, then follow the rule order across *all* children (so one child can't take a
   therapist via a weaker rule that another child needed via a stronger one), then distance.
 - Parent declines add (session, therapist) to an exclusion list for re-planning.
+- **Admin-confirmed scheduling rules** sit on top of this ranking. A hard "never" rule excludes the candidate. A
+  soft "avoid" rule ranks after minimising cancellations and before team/tier/history/distance. See
+  [scheduling-preferences.md](scheduling-preferences.md).
 
 ### Chain swaps (rare)
 

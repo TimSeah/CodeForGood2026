@@ -20,6 +20,7 @@ const PATHS = {
   right: <path d="M9 18l6-6-6-6" />,
   refresh: <><path d="M21 12a9 9 0 1 1-3-6.7L21 8" /><path d="M21 3v5h-5" /></>,
   menu: <path d="M4 6h16M4 12h16M4 18h16" />,
+  rules: <><path d="M9 6h11M9 12h11M9 18h11" /><path d="M3.5 6l1.5 1.5L7.5 5" /><path d="M3.5 12l1.5 1.5L7.5 11" /><path d="M3.5 18l1.5 1.5L7.5 17" /></>,
 } as const;
 
 export type IconName = keyof typeof PATHS;

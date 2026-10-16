@@ -1,5 +1,6 @@
 import type { Absence, AssignmentCandidate, PlanAssignment, Session, Therapist } from "@/lib/types";
 import { isAbsent } from "./availability";
+import { matchingRules, type PreferenceRule, ruleLabel } from "./preferences";
 import type { EngineStudent } from "./ranking";
 import { classify, STEP_RANK } from "./ranking";
 
@@ -9,6 +10,8 @@ export interface CandidateContext {
   therapists: Therapist[];
   students: Map<number, EngineStudent>;
   exclusions?: Map<number, Set<number>>;
+  /** Confirmed preferences (only "active" ones apply). */
+  preferences?: PreferenceRule[];
 }
 
 /**
@@ -21,6 +24,12 @@ export function candidatesForAssignment(
   ctx: CandidateContext,
 ): AssignmentCandidate[] {
   const student = ctx.students.get(assignment.studentId)!;
+  const session = {
+    studentId: assignment.studentId,
+    date: ctx.sessions.find((x) => x.id === assignment.sessionId)?.date ?? "",
+    startTime: assignment.startTime,
+    endTime: assignment.endTime,
+  };
 
   const bookedWith = new Map<number, string>();
   const planned = new Map(
@@ -35,6 +44,7 @@ export function candidatesForAssignment(
   return ctx.therapists
     .map((therapist): AssignmentCandidate => {
       const classification = classify(therapist, student);
+      const rules = matchingRules(ctx.preferences, therapist.id, session);
       const absence = ctx.absences.find(
         (x) => x.therapistId === therapist.id && (x.slot === null || x.slot === assignment.slot),
       );
@@ -46,7 +56,9 @@ export function candidatesForAssignment(
           ? "Parent declined"
           : bookedWith.has(therapist.id)
             ? `Booked with ${bookedWith.get(therapist.id)}`
-            : null;
+            : rules.hard.length
+              ? `${ruleLabel(rules.hard[0])}: ${rules.hard[0].summary}`
+              : null;
       return {
         therapistId: therapist.id,
         therapistName: therapist.name,
@@ -56,12 +68,15 @@ export function candidatesForAssignment(
         reasons: classification.reasons,
         available: unavailableReason === null,
         rejected: assignment.rejectedTherapistIds.includes(therapist.id),
+        avoided: rules.soft.length > 0,
+        preferenceNotes: [...rules.hard, ...rules.soft].map((r) => `${ruleLabel(r)}: ${r.summary}`),
         unavailableReason,
       };
     })
     .sort(
       (x, y) =>
         Number(y.available) - Number(x.available) ||
+        Number(x.avoided) - Number(y.avoided) || // soft preferences come before the usual ranking
         STEP_RANK[x.step] - STEP_RANK[y.step] ||
         (x.distanceKm ?? Infinity) - (y.distanceKm ?? Infinity) ||
         x.therapistName.localeCompare(y.therapistName),

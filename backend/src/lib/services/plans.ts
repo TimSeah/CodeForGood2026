@@ -18,7 +18,8 @@ import {
 import { getPreviousSessionLog } from "@/lib/repositories/session-logs";
 import { cancelSession, reassignSession } from "@/lib/repositories/sessions";
 import { getStudent } from "@/lib/repositories/students";
-import type { AssignmentCandidate, NotifyMode, Plan, PlanAssignment } from "@/lib/types";
+import type { AssignmentCandidate, ChangeReason, NotifyMode, Plan, PlanAssignment } from "@/lib/types";
+import { recordAssignmentChange } from "./preferences";
 import { candidatesForAssignment } from "./reallocation/candidates";
 import { loadDayContext } from "./reallocation/context";
 import { type ProposedAssignment, proposeReallocations } from "./reallocation/engine";
@@ -184,8 +185,17 @@ function applyEdit(plan: Omit<Plan, "issues">, a: PlanAssignment, toTherapistId:
   });
 }
 
-/** Admin changes who covers one session in a draft. The result is validated, not rejected outright. */
-export function editAssignment(planId: number, assignmentId: number, toTherapistId: number | null, actor: string): Plan {
+/**
+ * Admin changes who covers one session in a draft. The result is validated, not rejected outright.
+ * The admin's reason (if given) is recorded as evidence for the scheduling preference memory.
+ */
+export function editAssignment(
+  planId: number,
+  assignmentId: number,
+  toTherapistId: number | null,
+  actor: string,
+  reason?: ChangeReason | null,
+): Plan {
   const plan = getPlanOrThrow(planId);
   if (plan.status !== "draft") throw new HttpError(409, "Only draft plans can be edited");
   const a = plan.assignments.find((x) => x.id === assignmentId);
@@ -198,8 +208,9 @@ export function editAssignment(planId: number, assignmentId: number, toTherapist
       action: "plan.assignment_edited",
       entityType: "plan_assignment",
       entityId: assignmentId,
-      details: { planId, from: a.toTherapistId, to: toTherapistId },
+      details: { planId, from: a.toTherapistId, to: toTherapistId, reason: reason ?? null },
     });
+    recordAssignmentChange({ planId, date: plan.date, assignment: a, newTherapistId: toTherapistId, action: "edited", reason, actor });
   })();
   return getPlanOrThrow(planId);
 }
@@ -209,7 +220,12 @@ export function editAssignment(planId: number, assignmentId: number, toTherapist
  * any regenerated draft), and the row is re-run alone using the therapists still free in that slot, keeping every
  * other row as it is. If nobody is left, the row becomes a cancellation. The previous state is kept for Undo.
  */
-export function rejectAssignment(planId: number, assignmentId: number, actor: string): Plan {
+export function rejectAssignment(
+  planId: number,
+  assignmentId: number,
+  actor: string,
+  reason?: ChangeReason | null,
+): Plan {
   const plan = getPlanOrThrow(planId);
   if (plan.status !== "draft") throw new HttpError(409, "Only draft plans can be changed");
   const a = plan.assignments.find((x) => x.id === assignmentId);
@@ -242,7 +258,16 @@ export function rejectAssignment(planId: number, assignmentId: number, actor: st
       action: "plan.assignment_rejected",
       entityType: "plan_assignment",
       entityId: a.id,
-      details: { planId, rejected: a.toTherapistId, next: next?.therapistId ?? null },
+      details: { planId, rejected: a.toTherapistId, next: next?.therapistId ?? null, reason: reason ?? null },
+    });
+    recordAssignmentChange({
+      planId,
+      date: plan.date,
+      assignment: a,
+      newTherapistId: next?.therapistId ?? null,
+      action: "rejected",
+      reason,
+      actor,
     });
   })();
   return getPlanOrThrow(planId);

@@ -1,5 +1,6 @@
 import type { Absence, Session, Slot, Therapist, ValidationIssue } from "@/lib/types";
 import { isAbsent } from "./availability";
+import { matchingRules, type PreferenceRule, ruleLabel } from "./preferences";
 import { ENGINE_CONFIG, type EngineConfig, type EngineStudent, fitsTier } from "./ranking";
 
 // PURE check of a tentative plan against the day's schedule. Errors block approval; warnings are shown only.
@@ -17,6 +18,8 @@ export function validatePlan(args: {
   therapists: Therapist[];
   students: Map<number, EngineStudent>;
   exclusions?: Map<number, Set<number>>;
+  /** Confirmed preferences: active hard → error, active soft → warning. Suggestions are ignored. */
+  preferences?: PreferenceRule[];
   config?: Partial<EngineConfig>;
 }): ValidationIssue[] {
   const config = { ...ENGINE_CONFIG, ...args.config };
@@ -54,6 +57,17 @@ export function validatePlan(args: {
     }
     if (config.designatedOnlyForHomeSchool && session.location !== "clinic") {
       issues.push({ level: "error", message: `${who}: ${session.location} sessions need the designated therapist`, assignmentId: a.id });
+    }
+    const rules = matchingRules(args.preferences, t.id, session);
+    for (const r of rules.hard) {
+      issues.push({ level: "error", message: `${who}: breaks confirmed ${ruleLabel(r)} — ${r.summary}`, assignmentId: a.id });
+    }
+    for (const r of rules.soft) {
+      issues.push({
+        level: "warning",
+        message: `${who}: goes against confirmed ${ruleLabel(r)} — ${r.summary}. Keep it only if no suitable alternative is free.`,
+        assignmentId: a.id,
+      });
     }
     if (child.blacklist.has(t.id)) {
       issues.push({ level: "warning", message: `${who}: on the child's blacklist`, assignmentId: a.id });

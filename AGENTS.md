@@ -34,6 +34,10 @@ touching rescheduling, approval, intake or messaging):
 3. Then: same team → tier match → covered this child before → anyone → blacklisted. Ties broken by distance.
 4. Chain swaps (A→B's child, B→C) only as a separate alternative plan, and only if they avoid a cancellation.
 5. Admin approves every plan; parents must accept via WhatsApp (or admin records it) by start − 15 min.
+6. **Admin-confirmed scheduling rules** ([docs/plans/scheduling-preferences.md](docs/plans/scheduling-preferences.md)):
+   hard "never" rules exclude a therapist (validation error if forced); soft "avoid" rules rank after cancellations
+   but before team/tier/history/distance. Suggestions learned from repeated admin changes **never** apply until an
+   admin confirms them. Don't add any learning that skips that confirmation.
 
 ⚠️ The case study uses a **fictional calendar**: 3 July 2031 is a Monday and 11 July 2031 is a Tuesday in the
 documents. Seed data follows the documents. Don't "fix" weekdays with `Date#getDay()`.

@@ -6,6 +6,7 @@ import { Icon } from "@/components/icons";
 import { useSelectedDate } from "@/hooks/useSelectedDate";
 import { useGeneratePlan, usePlans } from "./api";
 import { CalendarPreview } from "./CalendarPreview";
+import { SuggestionsPanel } from "@/features/preferences/SuggestionsPanel";
 import { DraftPlanCard } from "./DraftPlanCard";
 
 const cancelsIn = (p?: Plan) => p?.assignments.filter((a) => a.toTherapistId === null).length ?? 0;
@@ -69,7 +70,7 @@ export function ApprovalPage() {
           <p className="text-sm text-muted">
             {generationMode === "rules"
               ? "Uses deterministic team, tier, history, availability, and distance ranking."
-              : "Starts from the safe rule-based draft, then applies your instruction through the same validated scheduling tools."}
+              : "Starts from the safe rule-based draft, then applies your instruction through the same validated scheduling tools. The instruction applies to this draft only — if it sounds like a lasting rule, you’ll be asked to confirm it separately."}
           </p>
           {generationMode === "agent" && (
             <label className="flex flex-col gap-1.5 text-[13px] font-semibold text-ink-soft">
@@ -87,6 +88,7 @@ export function ApprovalPage() {
         </div>
       </Card>
       {generate.error && <Callout tone="danger">{generate.error.message}</Callout>}
+      <SuggestionsPanel />
       <QueryState isLoading={isLoading} error={error} />
 
       {!isLoading && !main && (

@@ -32,6 +32,11 @@ backend/
 │           ├── session-logs.ts         Session log CRUD + single-session PDF
 │           ├── absences.ts             Admin-entered absences
 │           ├── demo-scenario.ts        Loads the Case-Scenario.docx disruption (used by db:reset)
+│           ├── rescheduling-agent.ts   AI agent mode (OpenAI tools over the same candidates/validation)
+│           ├── preferences/            Admin-confirmed scheduling preference memory (docs/plans/scheduling-preferences.md)
+│           │   ├── index.ts            Evidence capture, suggestions, confirm/reject/edit/pause/resume/remove + audit
+│           │   ├── detect.ts           PURE pattern detection (threshold, distinct dates, dedup) → suggestions only
+│           │   └── agent-intent.ts     PURE "does this agent prompt sound like a lasting rule?"
 │           ├── whatsapp/
 │           │   ├── gateway.ts          WhatsAppGateway interface + PLACEHOLDER (writes to notifications outbox)
 │           │   └── messages.ts         Message wording
@@ -42,6 +47,8 @@ backend/
 │               ├── swaps.ts            Chain-swap alternative plan
 │               ├── validate.ts         Validation of (edited) plans: errors block approval, warnings inform
 │               ├── availability.ts     Absent / busy / affected helpers
+│               ├── preferences.ts      PURE: does an ACTIVE preference apply to (therapist, session)? + wording
+│               ├── candidates.ts       Ranked candidates (shared by the API and the AI agent)
 │               ├── distance.ts         Singapore area centroids → km
 │               ├── context.ts          Loads one date's data for the pure functions (only DB-touching file here)
 │               └── engine.test.ts
@@ -115,9 +122,9 @@ have the bot call `POST /api/whatsapp/responses` when parents reply.
 | GET | `/api/plans` | `?date=` — newest first; drafts include `issues`; also expires overdue parent replies |
 | POST | `/api/plans/generate` | `{ date }` — re-run the engine (supersedes older drafts, keeps admin edits) |
 | GET | `/api/plans/:id` | |
-| PATCH | `/api/plans/:id/assignments/:aid` | `{ toTherapistId \| null }` — admin edit, re-validated |
+| PATCH | `/api/plans/:id/assignments/:aid` | `{ toTherapistId \| null, reason?: { code, note? } }` — admin edit, re-validated; reason = preference evidence |
 | GET | `/api/plans/:id/assignments/:aid/candidates` | Every therapist ranked, with availability |
-| POST | `/api/plans/:id/assignments/:aid/reject` | Reject this row's therapist → re-run just this row with who's still free (cancel if nobody) |
+| POST | `/api/plans/:id/assignments/:aid/reject` | `{ reason? }` — reject this row's therapist → re-run just this row with who's still free (cancel if nobody) |
 | POST | `/api/plans/:id/assignments/:aid/undo` | Undo the latest row reject (rejections also persist across regenerated drafts) |
 | POST | `/api/plans/:id/approve` | `{ notifyMode: "whatsapp" \| "manual" }` — 409 + errors if invalid |
 | POST | `/api/plans/:id/reject` | |
@@ -129,6 +136,11 @@ have the bot call `POST /api/whatsapp/responses` when parents reply.
 | GET/PATCH/DELETE | `/api/session-logs/:id` | |
 | GET | `/api/session-logs/:id/pdf` | Single-session PDF (sent to substitutes) |
 | GET | `/api/schedule/monthly` | `?month=YYYY-MM` — MWF/TT allocation table |
+| GET/POST | `/api/preferences` | `?status=suggested,active` / `{ type, therapistId, studentId?, strength, days?, boundaryTime?, appliesTo?, ongoing?, effectiveFrom?, effectiveTo?, reason? }` (admin-created = active) |
+| GET/PATCH/DELETE | `/api/preferences/:id` | edit an active/paused rule · DELETE = status `removed` (kept for audit) |
+| POST | `/api/preferences/:id/confirm` | suggestion → active (time rules need days, time, start/end, ongoing or end date) |
+| POST | `/api/preferences/:id/reject` | `{ reason? }` — "not a rule"; never suggested again |
+| POST | `/api/preferences/:id/pause`, `/resume` | |
 | GET | `/api/audit` | `?limit=100` |
 
 ## Gotchas
@@ -136,6 +148,9 @@ have the bot call `POST /api/whatsapp/responses` when parents reply.
 - `better-sqlite3` is a native module; it's listed in `serverExternalPackages` in `next.config.ts`. Keep it there.
 - SQLite booleans are `0/1` integers; timestamps are UTC text `YYYY-MM-DD HH:MM:SS`. Session times are SGT.
 - `absences.type = 'off'` means "rostered off" (part-timer non-working slot), not a disruption.
+- Scheduling preferences: only status `active` may influence anything (`activeRules()`), so never pass suggestions to
+  the engine. Pass `preferences` through the day context (`loadDayContext`) so engine, candidates, validation and the
+  agent stay consistent. The blacklist is separate ("last resort"); don't use it for hard incompatibilities.
 - A session with `therapist_id = NULL` and `status = 'scheduled'` means "needs cover" (parent declined the substitute).
 - Known gaps / good next tasks: real WhatsApp sending, OL/observing availability, therapist phone numbers,
   auth/roles (anyone can call every endpoint), a shared secret on `/api/whatsapp/responses`.

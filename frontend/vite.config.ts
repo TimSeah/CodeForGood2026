@@ -11,6 +11,7 @@ export default defineConfig({
   server: {
     port: 5173,
     // All API calls go to /api/... and are forwarded to the Next.js backend, so no CORS setup is needed.
-    proxy: { "/api": "http://localhost:3001" },
+    // API_PROXY_TARGET lets a second checkout / verification run point at a backend on another port.
+    proxy: { "/api": process.env.API_PROXY_TARGET ?? "http://localhost:3001" },
   },
 });

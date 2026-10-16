@@ -1,10 +1,11 @@
 import { useState } from "react";
-import type { PlanAssignment, ValidationIssue } from "@/api/types";
+import type { ChangeReason, PlanAssignment, ValidationIssue } from "@/api/types";
 import { Badge, Button, LinkButton } from "@/components/ui";
 import { Icon } from "@/components/icons";
 import { formatTime, STEP_LABEL, STEP_TONE } from "@/lib/format";
 import { useTherapists } from "@/features/reference/api";
 import { useCandidates, useEditAssignment, useRejectAssignment, useUndoAssignmentReject } from "./api";
+import { ReasonPicker } from "./ReasonPicker";
 
 /** Column layout shared by the row and the header in DraftPlanCard. Stacks on narrow screens. */
 export const ROW_GRID =
@@ -21,6 +22,7 @@ export function AssignmentRow({
   issues: ValidationIssue[];
 }) {
   const [editing, setEditing] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
   const isCancel = a.toTherapistId === null;
   const errors = issues.filter((i) => i.level === "error");
 
@@ -92,16 +94,45 @@ export function AssignmentRow({
                 Change
               </Button>
             )}
-            {editable && <RowActions a={a} />}
+            {editable && <RowActions a={a} onReject={() => setRejecting(true)} />}
           </div>
+          {rejecting && (
+            <div className="md:col-span-5">
+              <RejectWithReason a={a} onDone={() => setRejecting(false)} />
+            </div>
+          )}
         </>
       )}
     </div>
   );
 }
 
+/** Reject the proposed therapist, saying why (the reason feeds the preference memory), then re-run this row. */
+function RejectWithReason({ a, onDone }: { a: PlanAssignment; onDone: () => void }) {
+  const reject = useRejectAssignment();
+  const [reason, setReason] = useState<ChangeReason | null>(null);
+  return (
+    <div className="flex flex-col gap-2.5 md:ml-[112px] md:max-w-xl">
+      <ReasonPicker name={`reject-reason-${a.id}`} therapistName={a.toTherapistName ?? "this therapist"} value={reason} onChange={setReason} />
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          size="sm"
+          disabled={!reason || reject.isPending}
+          onClick={() => reject.mutate({ planId: a.planId, assignmentId: a.id, reason }, { onSuccess: onDone })}
+        >
+          {reject.isPending ? "Working…" : `Reject ${a.toTherapistName} and find the next best`}
+        </Button>
+        <Button size="sm" variant="secondary" onClick={onDone}>
+          Back
+        </Button>
+        {reject.error && <span className="text-sm font-semibold text-bad">{reject.error.message}</span>}
+      </div>
+    </div>
+  );
+}
+
 /** Reject this row's proposal (re-run just this row) or undo the last reject. */
-function RowActions({ a }: { a: PlanAssignment }) {
+function RowActions({ a, onReject }: { a: PlanAssignment; onReject: () => void }) {
   const reject = useRejectAssignment();
   const undo = useUndoAssignmentReject();
   const busy = reject.isPending || undo.isPending;
@@ -119,7 +150,7 @@ function RowActions({ a }: { a: PlanAssignment }) {
       <LinkButton
         tone={a.toTherapistId === null ? "brand" : "danger"}
         disabled={busy}
-        onClick={() => reject.mutate(ids)}
+        onClick={() => (a.toTherapistId === null ? reject.mutate(ids) : onReject())}
         title={
           a.toTherapistId === null
             ? "Look again for a free therapist for this session"
@@ -150,10 +181,13 @@ function CandidateSelect({ a, onDone }: { a: PlanAssignment; onDone: () => void 
   const { data = [], isLoading } = useCandidates(a.planId, a.id, true);
   const edit = useEditAssignment();
   const [value, setValue] = useState(a.toTherapistId === null ? "cancel" : String(a.toTherapistId));
+  const [reason, setReason] = useState<ChangeReason | null>(null);
+  // Moving a PROPOSED therapist off the session needs a reason (it's how the preference memory learns).
+  const replacing = a.toTherapistId !== null && value !== String(a.toTherapistId);
 
   const save = () =>
     edit.mutate(
-      { planId: a.planId, assignmentId: a.id, toTherapistId: value === "cancel" ? null : Number(value) },
+      { planId: a.planId, assignmentId: a.id, toTherapistId: value === "cancel" ? null : Number(value), reason: replacing ? reason : null },
       { onSuccess: onDone },
     );
 
@@ -189,6 +223,11 @@ function CandidateSelect({ a, onDone }: { a: PlanAssignment; onDone: () => void 
               <span className="text-[13px] text-muted">{c.rank}</span>
               <Badge tone={STEP_TONE[c.step]}>{STEP_LABEL[c.step]}</Badge>
               {c.rejected && <Badge tone="danger">rejected by you</Badge>}
+              {c.avoided && (
+                <span title={c.preferenceNotes.join("\n")}>
+                  <Badge tone="warning">avoid rule</Badge>
+                </span>
+              )}
               {c.distanceKm !== null && <span className="ml-auto text-[13px] text-muted">{c.distanceKm} km</span>}
             </>,
           ),
@@ -209,8 +248,11 @@ function CandidateSelect({ a, onDone }: { a: PlanAssignment; onDone: () => void 
         )}
         <div className="border-t border-line-soft">{option("cancel", <span className="font-bold text-bad">Cancel this session instead</span>)}</div>
       </div>
+      {replacing && (
+        <ReasonPicker name={`edit-reason-${a.id}`} therapistName={a.toTherapistName ?? "this therapist"} value={reason} onChange={setReason} />
+      )}
       <div className="flex flex-wrap items-center gap-2">
-        <Button onClick={save} disabled={edit.isPending}>
+        <Button onClick={save} disabled={edit.isPending || (replacing && !reason)}>
           {edit.isPending ? "Saving…" : "Save"}
         </Button>
         <Button variant="secondary" onClick={onDone}>
