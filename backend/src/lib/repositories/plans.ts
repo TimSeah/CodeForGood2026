@@ -34,6 +34,8 @@ interface AssignmentRow {
   rationale: string;
   chain_id: string | null;
   edited_by_admin: number;
+  rejected_therapist_ids: string;
+  history: string;
   parent_status: ParentStatus;
   parent_responded_at: string | null;
 }
@@ -68,6 +70,8 @@ const toAssignment = (r: AssignmentRow): PlanAssignment => ({
   rationale: JSON.parse(r.rationale) as string[],
   chainId: r.chain_id,
   editedByAdmin: r.edited_by_admin === 1,
+  rejectedTherapistIds: JSON.parse(r.rejected_therapist_ids) as number[],
+  canUndo: (JSON.parse(r.history) as unknown[]).length > 0,
   parentStatus: r.parent_status,
   parentRespondedAt: r.parent_responded_at,
 });
@@ -162,6 +166,45 @@ export function updateAssignmentTarget(
       input.toTherapistId === null ? "not_required" : "pending",
       id,
     );
+}
+
+/** A row's state before a row-level reject, so it can be restored by "Undo". */
+export interface AssignmentSnapshot {
+  toTherapistId: number | null;
+  step: PlanStep;
+  distanceKm: number | null;
+  rationale: string[];
+  editedByAdmin: boolean;
+  rejectedTherapistIds: number[];
+}
+
+export function getAssignmentHistory(id: number): AssignmentSnapshot[] {
+  const row = getDb().prepare("SELECT history FROM plan_assignments WHERE id = ?").get(id) as { history: string } | undefined;
+  return row ? (JSON.parse(row.history) as AssignmentSnapshot[]) : [];
+}
+
+/** Overwrites a row's proposal + reject bookkeeping (used by row reject / undo). */
+export function setAssignmentState(id: number, s: AssignmentSnapshot & { history: AssignmentSnapshot[] }) {
+  getDb()
+    .prepare(
+      `UPDATE plan_assignments SET to_therapist_id = ?, step = ?, distance_km = ?, rationale = ?, edited_by_admin = ?,
+       rejected_therapist_ids = ?, history = ?, chain_id = NULL, parent_status = ? WHERE id = ?`,
+    )
+    .run(
+      s.toTherapistId,
+      s.step,
+      s.distanceKm,
+      JSON.stringify(s.rationale),
+      s.editedByAdmin ? 1 : 0,
+      JSON.stringify(s.rejectedTherapistIds),
+      JSON.stringify(s.history),
+      s.toTherapistId === null ? "not_required" : "pending",
+      id,
+    );
+}
+
+export function setRejectedTherapists(id: number, ids: number[]) {
+  getDb().prepare("UPDATE plan_assignments SET rejected_therapist_ids = ? WHERE id = ?").run(JSON.stringify(ids), id);
 }
 
 export function setPlanStatus(id: number, status: PlanStatus, decidedBy: string, notifyMode: NotifyMode | null = null) {

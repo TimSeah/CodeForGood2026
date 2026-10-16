@@ -117,6 +117,8 @@ have the bot call `POST /api/whatsapp/responses` when parents reply.
 | GET | `/api/plans/:id` | |
 | PATCH | `/api/plans/:id/assignments/:aid` | `{ toTherapistId \| null }` — admin edit, re-validated |
 | GET | `/api/plans/:id/assignments/:aid/candidates` | Every therapist ranked, with availability |
+| POST | `/api/plans/:id/assignments/:aid/reject` | Reject this row's therapist → re-run just this row with who's still free (cancel if nobody) |
+| POST | `/api/plans/:id/assignments/:aid/undo` | Undo the latest row reject (rejections also persist across regenerated drafts) |
 | POST | `/api/plans/:id/approve` | `{ notifyMode: "whatsapp" \| "manual" }` — 409 + errors if invalid |
 | POST | `/api/plans/:id/reject` | |
 | POST | `/api/plans/expire` | `{ now? }` — run the 15-min deadline check (pass `now` to demo) |

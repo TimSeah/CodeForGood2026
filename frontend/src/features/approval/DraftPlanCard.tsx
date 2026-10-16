@@ -43,7 +43,7 @@ export function DraftPlanCard({ plan, title }: { plan: Plan; title: string }) {
         </p>
       ))}
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[760px] text-left text-sm">
+        <table className="w-full min-w-[840px] text-left text-sm">
           <thead className="text-xs text-slate-500">
             <tr>
               <th className="py-2">Slot</th>
@@ -51,6 +51,7 @@ export function DraftPlanCard({ plan, title }: { plan: Plan; title: string }) {
               <th>Usual therapist</th>
               <th>Replacement</th>
               <th>Why</th>
+              <th className="sr-only">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">

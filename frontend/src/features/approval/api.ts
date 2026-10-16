@@ -34,6 +34,18 @@ export const useEditAssignment = () =>
     api.patch<Plan>(`/plans/${planId}/assignments/${assignmentId}`, { toTherapistId }),
   );
 
+/** Reject one row's therapist; the backend re-runs that row alone with the therapists still free. */
+export const useRejectAssignment = () =>
+  useDayMutation(({ planId, assignmentId }: { planId: number; assignmentId: number }) =>
+    api.post<Plan>(`/plans/${planId}/assignments/${assignmentId}/reject`, {}),
+  );
+
+/** Undo the latest row reject (restores the previous therapist). */
+export const useUndoAssignmentReject = () =>
+  useDayMutation(({ planId, assignmentId }: { planId: number; assignmentId: number }) =>
+    api.post<Plan>(`/plans/${planId}/assignments/${assignmentId}/undo`, {}),
+  );
+
 export const useApprovePlan = () =>
   useDayMutation(({ planId, notifyMode }: { planId: number; notifyMode: NotifyMode }) =>
     api.post<Plan>(`/plans/${planId}/approve`, { notifyMode }),

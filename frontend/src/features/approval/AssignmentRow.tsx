@@ -2,7 +2,8 @@ import { useState } from "react";
 import type { PlanAssignment, ValidationIssue } from "@/api/types";
 import { Badge, Button, inputClass } from "@/components/ui";
 import { formatTime, STEP_LABEL, STEP_TONE } from "@/lib/format";
-import { useCandidates, useEditAssignment } from "./api";
+import { useTherapists } from "@/features/reference/api";
+import { useCandidates, useEditAssignment, useRejectAssignment, useUndoAssignmentReject } from "./api";
 
 /** One changed session in a plan. Drafts can be edited; the backend re-validates after every change. */
 export function AssignmentRow({
@@ -60,9 +61,52 @@ export function AssignmentRow({
             {i.level === "error" ? "✖" : "⚠"} {i.message}
           </p>
         ))}
+        <RejectedNote ids={a.rejectedTherapistIds} />
       </td>
+      <td className="pl-2 text-right">{editable && !editing && <RowActions a={a} />}</td>
     </tr>
   );
+}
+
+/** Reject this row's proposal (re-run just this row) or undo the last reject. */
+function RowActions({ a }: { a: PlanAssignment }) {
+  const reject = useRejectAssignment();
+  const undo = useUndoAssignmentReject();
+  const busy = reject.isPending || undo.isPending;
+  const ids = { planId: a.planId, assignmentId: a.id };
+
+  if (a.chainId) {
+    return <span className="text-xs text-slate-400" title="Part of a swap: reject the whole swap plan instead">swap</span>;
+  }
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <Button
+        variant="secondary"
+        disabled={busy}
+        onClick={() => reject.mutate(ids)}
+        title={
+          a.toTherapistId === null
+            ? "Look again for a free therapist for this session"
+            : `Reject ${a.toTherapistName} for this session and pick the next best free therapist`
+        }
+      >
+        {reject.isPending ? "…" : a.toTherapistId === null ? "Retry" : "Reject"}
+      </Button>
+      {a.canUndo && (
+        <button className="text-xs text-sky-700 underline disabled:opacity-50" disabled={busy} onClick={() => undo.mutate(ids)}>
+          Undo
+        </button>
+      )}
+      {(reject.error || undo.error) && <span className="text-xs text-rose-600">{(reject.error ?? undo.error)!.message}</span>}
+    </div>
+  );
+}
+
+function RejectedNote({ ids }: { ids: number[] }) {
+  const { data: therapists = [] } = useTherapists();
+  if (ids.length === 0) return null;
+  const names = ids.map((id) => therapists.find((t) => t.id === id)?.name ?? `#${id}`);
+  return <p className="mt-1 text-slate-500">Rejected for this session: {names.join(", ")}</p>;
 }
 
 function CandidateSelect({ a, onDone }: { a: PlanAssignment; onDone: () => void }) {
@@ -87,6 +131,7 @@ function CandidateSelect({ a, onDone }: { a: PlanAssignment; onDone: () => void 
             <option key={c.therapistId} value={c.therapistId}>
               {c.therapistName} ({c.rank}) · {STEP_LABEL[c.step]}
               {c.distanceKm !== null ? ` · ${c.distanceKm} km` : ""}
+              {c.rejected ? " · rejected by you" : ""}
             </option>
           ))}
         </optgroup>
