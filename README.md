@@ -17,7 +17,7 @@ cd backend && npm install && npm run db:reset && npm run dev
 cd frontend && npm install && npm run dev
 ```
 
-Then open http://localhost:5173 and click **Generate proposals** for 11 July 2031 (the case scenario).
+Then open http://localhost:5173: the 11 July 2031 case scenario is pre-loaded as WhatsApp reports. Review the draft on **Approval**, approve it, and try parent replies. The full workflow is in [docs/plans/rescheduling.md](docs/plans/rescheduling.md).
 
 ## WhatsApp absence intake bot
 

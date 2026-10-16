@@ -12,31 +12,47 @@ frontend/src/
 ├── App.tsx                   Route table. Add new pages here.
 ├── index.css                 Tailwind import + tiny global styles
 ├── api/
-│   ├── client.ts             fetch wrapper: api.get/post/patch, unwraps { data } / throws ApiError
+│   ├── client.ts             fetch wrapper: api.get/post/patch/delete, unwraps { data } / throws ApiError
+│   ├── invalidate.ts         invalidateDayData(): refetch everything day-scoped after a write
 │   └── types.ts              MIRROR of backend/src/lib/types.ts (backend is the source of truth)
 ├── components/               Shared, presentational, feature-agnostic
 │   ├── AppLayout.tsx         Header + nav + <Outlet/>. Add nav links here.
-│   └── ui.tsx                Card, Badge, Button, DateInput, QueryState
+│   ├── MonthCalendar.tsx     Sun–Sat month grid (like the per-person Excel sheets)
+│   └── ui.tsx                Card, Badge, Button, DateInput, Tabs, Modal, QueryState, inputClass
 ├── hooks/                    Shared hooks (e.g. useSelectedDate: date lives in ?date= URL param)
-├── lib/                      Pure helpers (formatting etc.). No React.
+├── lib/                      Pure helpers (formatting, case-calendar weekdays, labels). No React.
 └── features/<feature>/       One folder per domain area
-    ├── api.ts                React Query hooks for this feature (queries, mutations, query keys)
+    ├── api.ts                React Query hooks for this feature (queries, mutations)
     └── <Thing>Page.tsx / <Thing>Panel.tsx   Components for this feature
 ```
 
-Current features: `reallocation` (main Disruptions page), `absences`, `schedule`, `audit`, `reference`
-(therapists/students lookups shared by other features).
+Current features (see `docs/plans/rescheduling.md` for the workflow behind them):
+
+| Feature | Route | What |
+| --- | --- | --- |
+| `disruptions` | `/` | 7 AM view: WhatsApp reports (therapist / parent), who's away, link to the draft plan |
+| `intake` | — | WhatsApp report panels, unmatched-name resolution, manual report form, 30 s bot sync |
+| `absences` | — | Who's away + planned-leave form |
+| `approval` | `/approval` | Draft plan (+ swap alternative), editing with validation, approve dialog, parent replies, outbox, calendars |
+| `schedule` | `/schedule` | Monthly MWF/TT allocation table + daily view |
+| `logs` | `/logs` | Therapist portal: today's sessions, attendance + session log CRUD, PDF |
+| `audit` | `/audit` | Audit trail |
+| `reference` | — | Therapist / student lookups used everywhere |
 
 ## Rules
 
 - **Data fetching only through React Query hooks in `features/*/api.ts`.** Components never call `fetch` or
-  `api.*` directly. Each hook file exports its query-key helpers (`sessionsKey(date)`) so mutations elsewhere
-  can invalidate them.
-- **Mutations invalidate what they change** (e.g. approving a reallocation invalidates reallocations + sessions).
+  `api.*` directly.
+- **Mutations invalidate what they change.** Anything that can change the day's plan (absences, reports,
+  approvals, parent replies) calls `invalidateDayData(qc)` — the backend re-plans on most writes.
 - **Types come from `@/api/types`.** Don't redeclare API shapes in components. If the backend shape changed,
   update `api/types.ts` to match `backend/src/lib/types.ts`.
-- **Features may import from `components/`, `hooks/`, `lib/`, `api/`, and other features' `api.ts`** — but not
-  from other features' components. If two features need the same component, move it to `components/`.
+- **Features may import from `components/`, `hooks/`, `lib/`, `api/`, and other features' `api.ts`.** A *page*
+  may also compose another feature's exported `…Panel` / `…Form` (e.g. `DisruptionsPage` uses `BotReportsPanel`),
+  but panels must not reach into other features' internals. If two features need the same small component,
+  move it to `components/`.
+- **Dates:** July 2031 uses the case study's fictional calendar — use `weekdayIndex` / `formatCaseDate` from
+  `lib/format.ts`, never `new Date(date).getDay()`.
 - **Styling: Tailwind utility classes only.** No CSS modules, no styled-components, no UI kit unless the team agrees.
   Reuse `components/ui.tsx` before inventing new buttons/cards.
 - **Every query result handles loading, error and empty states** (use `<QueryState/>`).
