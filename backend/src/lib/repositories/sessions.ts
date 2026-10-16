@@ -52,7 +52,7 @@ export function listSessionsByDate(date: string) {
 }
 
 /** A month of sessions for one therapist (sessions they run OR originally owned) or one child. */
-export function listSessionsForMonth(month: string, filter: { therapistId?: number; studentId?: number }) {
+export function listSessionsForMonth(month: string, filter: { therapistId?: number; studentId?: number; confirmed?: true }) {
   const where = ["se.date LIKE ?"];
   const params: (string | number)[] = [`${month}-%`];
   if (filter.therapistId !== undefined) {
@@ -62,6 +62,26 @@ export function listSessionsForMonth(month: string, filter: { therapistId?: numb
   if (filter.studentId !== undefined) {
     where.push("se.student_id = ?");
     params.push(filter.studentId);
+  }
+  if (filter.confirmed) {
+    // Standing appointments are confirmed unless the therapist is away. A changed appointment
+    // becomes confirmed only after its latest approved assignment is accepted by the parent.
+    where.push("se.status = 'scheduled'", "se.therapist_id IS NOT NULL");
+    where.push(`(
+      (SELECT pa.parent_status FROM plan_assignments pa JOIN plans p ON p.id = pa.plan_id
+       WHERE pa.session_id = se.id AND p.status = 'approved' ORDER BY pa.id DESC LIMIT 1) = 'accepted'
+      OR (
+        NOT EXISTS (
+          SELECT 1 FROM plan_assignments pa JOIN plans p ON p.id = pa.plan_id
+          WHERE pa.session_id = se.id AND p.status = 'approved'
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM absences a
+          WHERE a.therapist_id = se.therapist_id AND a.date = se.date
+            AND (a.slot IS NULL OR a.slot = se.slot)
+        )
+      )
+    )`);
   }
   const rows = getDb()
     .prepare(`${SELECT} WHERE ${where.join(" AND ")} ORDER BY se.date, se.slot`)

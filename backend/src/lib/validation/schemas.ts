@@ -15,7 +15,12 @@ export const dateQuery = z.object({ date: isoDate });
 
 export const sessionsQuery = z.union([
   z.object({ date: isoDate }),
-  z.object({ month: isoMonth, therapistId: id.optional(), studentId: id.optional() }),
+  z.object({
+    month: isoMonth,
+    therapistId: id.optional(),
+    studentId: id.optional(),
+    confirmed: z.enum(["true"]).transform(() => true).optional(),
+  }),
 ]);
 
 export const createAbsenceBody = z.object({

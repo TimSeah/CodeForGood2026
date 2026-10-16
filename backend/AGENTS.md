@@ -114,7 +114,7 @@ have the bot call `POST /api/whatsapp/responses` when parents reply.
 | --- | --- | --- |
 | GET | `/api/health` | |
 | GET | `/api/therapists`, `/api/students` | |
-| GET | `/api/sessions` | `?date=` or `?month=YYYY-MM&therapistId=` / `&studentId=` |
+| GET | `/api/sessions` | `?date=` or `?month=YYYY-MM&therapistId=` / `&studentId=` / `&confirmed=true` |
 | GET/POST | `/api/absences` | `?date=` / `{ therapistId, date, slot?, type, note? }` → re-plans the date |
 | GET/POST | `/api/intake/reports` | `?date=` / `{ role, name, startDate, endDate, dayPart, mcAttached }` (manual/demo report) |
 | PATCH | `/api/intake/reports/:id` | `{ therapistId }` \| `{ studentId }` \| `{ ignore: true }` — resolve an unmatched report |
