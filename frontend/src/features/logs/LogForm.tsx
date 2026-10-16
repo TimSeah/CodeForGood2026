@@ -2,7 +2,8 @@ import { useState } from "react";
 import type { Attendance, SessionLog, Slot } from "@/api/types";
 import { Button, Field, inputClass } from "@/components/ui";
 import { useStudents, useTherapists } from "@/features/reference/api";
-import { type SessionLogInput, useCreateLog, useUpdateLog } from "./api";
+import { type SessionLogInput, useCreateLog, useUpdateLog, useUploadSessionVideo } from "./api";
+import { SessionVideoPanel } from "./SessionVideoPanel";
 
 const ATTENDANCE: Attendance[] = ["present", "late", "absent", "cancelled"];
 
@@ -23,7 +24,11 @@ export function LogForm({
   const { data: students = [] } = useStudents();
   const create = useCreateLog();
   const update = useUpdateLog();
-  const base = existing ?? preset;
+  const upload = useUploadSessionVideo();
+  const [savedLog, setSavedLog] = useState<SessionLog | null>(null);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const activeLog = savedLog ?? existing;
+  const base = activeLog ?? preset;
   const [form, setForm] = useState({
     date: base?.date ?? "",
     slot: (base?.slot ?? "AM") as Slot,
@@ -36,20 +41,32 @@ export function LogForm({
   });
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));
   const fixed = !!preset && !existing;
-  const mutation = existing ? update : create;
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const body = {
       ...form,
-      sessionId: existing?.sessionId ?? preset?.sessionId ?? null,
+      sessionId: activeLog?.sessionId ?? preset?.sessionId ?? null,
       summary: form.summary || null,
       goals: form.goals || null,
       notes: form.notes || null,
     };
-    if (existing) update.mutate({ id: existing.id, ...body }, { onSuccess: onDone });
-    else create.mutate(body, { onSuccess: onDone });
+    try {
+      const log = activeLog
+        ? await update.mutateAsync({ id: activeLog.id, ...body })
+        : await create.mutateAsync(body);
+      setSavedLog(log);
+      if (videoFile) {
+        await upload.mutateAsync({ sessionLogId: log.id, file: videoFile });
+        setVideoFile(null);
+      }
+      onDone();
+    } catch {
+      // Mutation errors are shown below. A saved log stays open so a failed upload can be retried.
+    }
   };
+
+  const isSaving = create.isPending || update.isPending || upload.isPending;
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-4 text-sm">
@@ -109,14 +126,32 @@ export function LogForm({
       <Field label="Notes" hint="clinical notes; included in the session PDF">
         <textarea className={`${inputClass} py-2.5`} rows={3} value={form.notes} onChange={(e) => set("notes", e.target.value)} />
       </Field>
+      {activeLog?.videoReview && activeLog.videoReview.status !== "uploading" ? (
+        <SessionVideoPanel log={activeLog} />
+      ) : (
+        <>
+          {activeLog?.videoReview && <p className="text-sm text-muted">The upload did not finish. Choose the same file to retry it.</p>}
+          <Field label="Session video (optional)" hint="MP4, WebM, MOV, or MKV up to 1 GB. Stored locally; summarized on request or therapist handover">
+            <input
+              type="file"
+              accept="video/mp4,video/webm,video/quicktime,video/x-matroska,.mkv"
+              className={`${inputClass} py-2`}
+              onChange={(e) => setVideoFile(e.target.files?.[0] ?? null)}
+            />
+            {videoFile && <span className="mt-1 text-xs font-normal text-muted">Selected: {videoFile.name}</span>}
+          </Field>
+        </>
+      )}
       <div className="flex flex-wrap items-center gap-2">
-        <Button type="submit" disabled={mutation.isPending}>
-          {existing ? "Save changes" : "Save log"}
+        <Button type="submit" disabled={isSaving}>
+          {isSaving ? "Saving…" : activeLog ? "Save changes" : "Save log"}
         </Button>
         <Button type="button" variant="secondary" onClick={onDone}>
           Cancel
         </Button>
-        {mutation.error && <span className="font-semibold text-bad">{mutation.error.message}</span>}
+        {(create.error || update.error || upload.error) && (
+          <span className="font-semibold text-bad">{upload.error?.message ?? update.error?.message ?? create.error?.message}</span>
+        )}
       </div>
     </form>
   );

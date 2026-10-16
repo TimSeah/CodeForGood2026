@@ -1,4 +1,5 @@
 import { getDb } from "@/lib/db/client";
+import { getSessionLogVideo } from "@/lib/repositories/video-reviews";
 import type { Attendance, SessionLog, Slot } from "@/lib/types";
 
 interface SessionLogRow {
@@ -37,6 +38,7 @@ const toLog = (r: SessionLogRow): SessionLog => ({
   summary: r.summary,
   notes: r.notes,
   goals: r.goals,
+  videoReview: getSessionLogVideo(r.id),
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 });

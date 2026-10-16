@@ -1,5 +1,5 @@
-// MIRROR of backend/src/lib/types.ts — the backend file is the source of truth.
-// When an API shape changes, update the backend file first, then copy the change here.
+// Domain types shared across the backend. This file is the source of truth for API shapes —
+// frontend/src/api/types.ts mirrors it, so update both together.
 
 /** SBT = Senior Behavior Therapist, LBT = Lead Behavior Therapist (both "senior");
  *  BT = Behavior Therapist, PT = Program Therapist (both "junior"). */
@@ -216,6 +216,8 @@ export interface SessionLog {
   /** Private clinical notes. */
   notes: string | null;
   goals: string | null;
+  /** Private recording and generated handover highlights, if one was uploaded for this log. */
+  videoReview: VideoReview | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -230,23 +232,22 @@ export interface VideoReviewClip {
   startSeconds: number;
   endSeconds: number;
   eventType: VideoMomentType;
+  /** Short, scannable title for the clip. */
+  title: string;
   /** Observable, neutral description shown beside the clip. */
   caption: string;
   confidence: number;
-  /** Local backend media endpoint for this generated clip. */
-  videoUrl: string;
 }
 
 export interface VideoReview {
   id: number;
+  sessionLogId: number;
   originalFilename: string;
   contentType: string;
   sizeBytes: number;
   status: VideoReviewStatus;
   summary: string | null;
   errorMessage: string | null;
-  /** Local backend media endpoint for the private source video. */
-  videoUrl: string | null;
   clips: VideoReviewClip[];
   createdAt: string;
   updatedAt: string;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Attendance, SessionLog } from "@/api/types";
 import { Badge, Button, Card, DateInput, inputClass, LinkButton, Modal, PageHeader, QueryState, Tabs, type Tone } from "@/components/ui";
 import { Icon } from "@/components/icons";
@@ -6,8 +6,9 @@ import { useStudents, useTherapists } from "@/features/reference/api";
 import { useSessions } from "@/features/schedule/api";
 import { useSelectedDate } from "@/hooks/useSelectedDate";
 import { formatCaseDate, formatTime } from "@/lib/format";
-import { type LogFilter, logPdfUrl, useDeleteLog, useSessionLogs } from "./api";
+import { type LogFilter, logPdfUrl, useDeleteLog, usePrepareVideoHandover, useSessionLogs } from "./api";
 import { LogForm } from "./LogForm";
+import { SessionVideoPanel } from "./SessionVideoPanel";
 
 const ATTENDANCE_TONE: Record<Attendance, Tone> = { present: "success", late: "warning", absent: "danger", cancelled: "danger" };
 
@@ -58,6 +59,7 @@ export function LogsPage() {
 function MySessions({ date, therapistId }: { date: string; therapistId: number }) {
   const { data: sessions = [], isLoading, error } = useSessions(date);
   const { data: logs = [] } = useSessionLogs({ date, therapistId });
+  const { data: students = [] } = useStudents();
   const [open, setOpen] = useState<number | null>(null);
   const mine = sessions.filter((s) => s.therapistId === therapistId);
 
@@ -68,6 +70,10 @@ function MySessions({ date, therapistId }: { date: string; therapistId: number }
       <ul className="grid items-start gap-4 lg:grid-cols-2">
         {mine.map((s) => {
           const log = logs.find((l) => l.sessionId === s.id);
+          const student = students.find((item) => item.id === s.studentId);
+          const isNewTherapist = student && (s.originalTherapistId !== null
+            ? s.originalTherapistId !== therapistId
+            : student.teamTherapistIds.length > 0 && !student.teamTherapistIds.includes(therapistId));
           const isOpen = open === s.id;
           return (
             <li
@@ -106,11 +112,50 @@ function MySessions({ date, therapistId }: { date: string; therapistId: number }
                   />
                 </div>
               )}
+              {isNewTherapist && <TakeoverHandover studentId={s.studentId} date={date} slot={s.slot} />}
             </li>
           );
         })}
       </ul>
     </section>
+  );
+}
+
+function TakeoverHandover({
+  studentId,
+  date,
+  slot,
+}: {
+  studentId: number;
+  date: string;
+  slot: "AM" | "PM";
+}) {
+  const { data: logs = [] } = useSessionLogs({ studentId });
+  const prepare = usePrepareVideoHandover();
+  const isPrior = (log: SessionLog) => log.date < date || (log.date === date && log.slot < slot);
+  const previous = logs.find(isPrior);
+  const videoLog = logs.find((log) => isPrior(log) && log.videoReview);
+
+  useEffect(() => {
+    if (previous) prepare.mutate({ studentId, date, slot });
+  }, [studentId, date, slot, previous?.id]);
+
+  return (
+    <div className="border-t border-line-soft pt-3">
+      <p className="mb-2 text-xs font-bold tracking-wide text-muted uppercase">New therapist handover</p>
+      {videoLog ? (
+        <>
+          <p className="mb-2 text-xs text-muted">
+            Prior recording · {formatCaseDate(videoLog.date)} · {videoLog.slot}
+            {prepare.isPending ? " · Preparing highlights…" : ""}
+          </p>
+          <SessionVideoPanel log={videoLog} expanded />
+        </>
+      ) : (
+        <p className="rounded-xl bg-subtle px-4 py-3 text-sm text-muted">No earlier session video is available for handover.</p>
+      )}
+      {prepare.error && <p className="mt-2 text-sm font-semibold text-bad">Video handover could not be prepared: {prepare.error.message}</p>}
+    </div>
   );
 }
 
@@ -195,7 +240,10 @@ function LogTable({ date, therapistId }: { date: string; therapistId: number | "
                     <span className="capitalize">{l.attendance}</span>
                   </Badge>
                 </div>
-                <div className="text-ink-soft">{l.summary ?? "—"}</div>
+                <div className="space-y-2 text-ink-soft">
+                  <div>{l.summary ?? "—"}</div>
+                  <SessionVideoPanel log={l} />
+                </div>
                 <div className="flex gap-0.5 md:justify-end">
                   <a
                     className="rounded-md px-1.5 py-1 text-[13px] font-bold text-brand underline-offset-3 hover:underline"

@@ -26,6 +26,7 @@ import { type ProposedAssignment, proposeReallocations } from "./reallocation/en
 import { classify } from "./reallocation/ranking";
 import { validatePlan } from "./reallocation/validate";
 import { getWhatsAppGateway, therapistPhone } from "./whatsapp/gateway";
+import { processPreviousVideoForTakeover } from "./video-reviews";
 import {
   CENTRE_PHONE,
   parentCancelledMessage,
@@ -320,21 +321,39 @@ export function listCandidates(planId: number, assignmentId: number): Assignment
  * substitute gets the child's last-session summary + PDF. With "manual", nothing is sent and the admin records
  * parent responses in the portal.
  */
-export function approvePlan(planId: number, notifyMode: NotifyMode, actor: string): Plan {
+export async function approvePlan(planId: number, notifyMode: NotifyMode, actor: string): Promise<Plan> {
   const plan = getPlanOrThrow(planId);
   if (plan.status !== "draft") throw new HttpError(409, `Plan ${planId} is already ${plan.status}`);
   const errors = plan.issues.filter((i) => i.level === "error");
   if (errors.length) throw new HttpError(409, "Fix the plan's errors before approving", errors);
 
+  // A therapist handover is a natural processing trigger. Keep plan approval available if AI processing
+  // fails; the failed status is audited and the written handover remains available as a fallback.
+  const prepared = new Set<string>();
+  for (const assignment of plan.assignments) {
+    if (assignment.toTherapistId === null || assignment.toTherapistId === assignment.fromTherapistId) continue;
+    const key = `${assignment.studentId}:${plan.date}:${assignment.slot}`;
+    if (prepared.has(key)) continue;
+    prepared.add(key);
+    try {
+      await processPreviousVideoForTakeover(assignment.studentId, plan.date, assignment.slot, actor);
+    } catch {
+      // Video processing records the failure on the attached session video; it must not block the schedule.
+    }
+  }
+
+  const currentPlan = getPlanOrThrow(planId);
+  if (currentPlan.status !== "draft") throw new HttpError(409, `Plan ${planId} is already ${currentPlan.status}`);
+
   getDb().transaction(() => {
-    for (const a of plan.assignments) {
+    for (const a of currentPlan.assignments) {
       if (a.toTherapistId === null) cancelSession(a.sessionId, a.rationale.join("; "));
       else reassignSession(a.sessionId, a.toTherapistId);
     }
     setPlanStatus(planId, "approved", actor, notifyMode);
     supersedeDrafts(plan.date); // the other drafts (e.g. the swap alternative) were alternatives to this one
     logAudit({ actor, action: "plan.approved", entityType: "plan", entityId: planId, details: { notifyMode } });
-    if (notifyMode === "whatsapp") sendApprovalMessages(plan);
+    if (notifyMode === "whatsapp") sendApprovalMessages(currentPlan);
   })();
   return getPlanOrThrow(planId);
 }

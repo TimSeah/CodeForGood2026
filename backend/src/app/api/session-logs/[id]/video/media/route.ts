@@ -4,14 +4,16 @@ import { handle, queryOf } from "@/lib/http";
 import { getSessionVideoMedia } from "@/lib/services/video-reviews";
 import { idParam } from "@/lib/validation/schemas";
 
+type Ctx = { params: Promise<{ id: string }> };
+
 export const runtime = "nodejs";
 
-// GET /api/video-reviews/:id/media?clipId=2 — serve private local media with video range support.
-export const GET = handle(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
-  const id = idParam.parse((await ctx.params).id);
+// GET /api/session-logs/:id/video/media?clipId=2 — private, byte-range-enabled clip playback.
+export const GET = handle(async (req: Request, ctx: Ctx) => {
+  const sessionLogId = idParam.parse((await ctx.params).id);
   const query = queryOf(req);
   const clipId = query.clipId === undefined ? undefined : idParam.parse(query.clipId);
-  const media = await getSessionVideoMedia(id, clipId);
+  const media = await getSessionVideoMedia(sessionLogId, clipId);
   const range = req.headers.get("range");
 
   if (!range) {
