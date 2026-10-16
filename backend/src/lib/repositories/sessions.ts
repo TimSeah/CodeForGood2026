@@ -1,5 +1,5 @@
 import { getDb } from "@/lib/db/client";
-import type { Session } from "@/lib/types";
+import type { ParentStatus, Session } from "@/lib/types";
 
 interface SessionRow {
   id: number;
@@ -15,10 +15,14 @@ interface SessionRow {
   therapist_name: string | null;
   original_therapist_id: number | null;
   cancel_reason: string | null;
+  parent_status: ParentStatus | null;
 }
 
+// parent_status = acceptance state of the latest APPROVED change to this session, if any.
 const SELECT = `
-  SELECT se.*, st.name AS student_name, th.name AS therapist_name
+  SELECT se.*, st.name AS student_name, th.name AS therapist_name,
+    (SELECT pa.parent_status FROM plan_assignments pa JOIN plans p ON p.id = pa.plan_id
+     WHERE pa.session_id = se.id AND p.status = 'approved' ORDER BY pa.id DESC LIMIT 1) AS parent_status
   FROM sessions se
   JOIN students st ON st.id = se.student_id
   LEFT JOIN therapists th ON th.id = se.therapist_id`;
@@ -37,16 +41,35 @@ const toSession = (r: SessionRow): Session => ({
   therapistName: r.therapist_name,
   originalTherapistId: r.original_therapist_id,
   cancelReason: r.cancel_reason,
+  parentStatus: r.parent_status,
 });
 
-export function listSessionsByDate(date: string): Session[] {
+export function listSessionsByDate(date: string) {
   const rows = getDb()
     .prepare(`${SELECT} WHERE se.date = ? ORDER BY se.slot, st.name`)
     .all(date) as SessionRow[];
   return rows.map(toSession);
 }
 
-export function getSession(id: number): Session | null {
+/** A month of sessions for one therapist (sessions they run OR originally owned) or one child. */
+export function listSessionsForMonth(month: string, filter: { therapistId?: number; studentId?: number }) {
+  const where = ["se.date LIKE ?"];
+  const params: (string | number)[] = [`${month}-%`];
+  if (filter.therapistId !== undefined) {
+    where.push("(se.therapist_id = ? OR se.original_therapist_id = ?)");
+    params.push(filter.therapistId, filter.therapistId);
+  }
+  if (filter.studentId !== undefined) {
+    where.push("se.student_id = ?");
+    params.push(filter.studentId);
+  }
+  const rows = getDb()
+    .prepare(`${SELECT} WHERE ${where.join(" AND ")} ORDER BY se.date, se.slot`)
+    .all(...params) as SessionRow[];
+  return rows.map(toSession);
+}
+
+export function getSession(id: number) {
   const row = getDb().prepare(`${SELECT} WHERE se.id = ?`).get(id) as SessionRow | undefined;
   return row ? toSession(row) : null;
 }
@@ -56,12 +79,28 @@ export function reassignSession(id: number, therapistId: number) {
   getDb()
     .prepare(
       `UPDATE sessions
-       SET original_therapist_id = COALESCE(original_therapist_id, therapist_id), therapist_id = ?
+       SET original_therapist_id = COALESCE(original_therapist_id, therapist_id), therapist_id = ?,
+           status = 'scheduled', cancel_reason = NULL
        WHERE id = ?`,
     )
     .run(therapistId, id);
 }
 
+/** Puts a session back on a therapist without touching original_therapist_id (used when a change is undone). */
+export function setSessionTherapist(id: number, therapistId: number | null) {
+  getDb().prepare("UPDATE sessions SET therapist_id = ? WHERE id = ?").run(therapistId, id);
+}
+
 export function cancelSession(id: number, reason: string) {
   getDb().prepare("UPDATE sessions SET status = 'cancelled', cancel_reason = ? WHERE id = ?").run(reason, id);
+}
+
+/** Cancels a child's sessions on a date (optionally one slot). Returns how many changed. */
+export function cancelStudentSessions(studentId: number, date: string, slot: "AM" | "PM" | null, reason: string): number {
+  return getDb()
+    .prepare(
+      `UPDATE sessions SET status = 'cancelled', cancel_reason = ?
+       WHERE student_id = ? AND date = ? AND status = 'scheduled' AND (? IS NULL OR slot = ?)`,
+    )
+    .run(reason, studentId, date, slot, slot).changes;
 }

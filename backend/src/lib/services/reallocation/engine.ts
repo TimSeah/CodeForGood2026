@@ -1,77 +1,131 @@
-import type { Absence, Session, Slot, Therapist } from "@/lib/types";
-import { scoreCandidate } from "./scoring";
+import type { Absence, PlanStep, Session, Therapist } from "@/lib/types";
+import { affectedSessions, busyBySlot, isAbsent } from "./availability";
+import { minCostAssignment } from "./hungarian";
+import { ENGINE_CONFIG, type EngineConfig, type EngineStudent, type RankedCandidate, rankCandidates } from "./ranking";
+import { findSwapAlternative } from "./swaps";
 
 // PURE matching logic: no DB, no I/O. Everything it needs is passed in, so it is easy to unit test
 // (see engine.test.ts) and easy to swap for a smarter optimiser later.
 
 export interface EngineInput {
   sessions: Session[]; // all sessions for ONE date
-  absences: Absence[]; // all absences for that date
+  absences: Absence[]; // all absences for that date (including "off" rostering)
   therapists: Therapist[];
-  /** studentId → therapist ids on that child's team */
-  teams: Map<number, Set<number>>;
+  students: Map<number, EngineStudent>;
+  /** sessionId → therapists that must not be proposed (e.g. the parent declined them). */
+  exclusions?: Map<number, Set<number>>;
+  config?: Partial<EngineConfig>;
 }
 
-export interface Proposal {
+export interface ProposedAssignment {
   sessionId: number;
   fromTherapistId: number | null;
-  /** null = cancel the session */
+  /** null = cancel */
   toTherapistId: number | null;
-  score: number | null;
+  step: PlanStep;
+  distanceKm: number | null;
   rationale: string[];
+  chainId: string | null;
 }
 
-const isAbsent = (absences: Absence[], therapistId: number, slot: Slot) =>
-  absences.some((a) => a.therapistId === therapistId && (a.slot === null || a.slot === slot));
+export interface EngineResult {
+  primary: ProposedAssignment[];
+  /** Separate plan using chain swaps, offered only when it beats the primary (see ENGINE_CONFIG.swapTrigger). */
+  swapAlternative: ProposedAssignment[] | null;
+}
 
-export function proposeReallocations({ sessions, absences, therapists, teams }: EngineInput): Proposal[] {
-  const byId = new Map(therapists.map((t) => [t.id, t]));
-  const live = sessions.filter((s) => s.status === "scheduled");
+// Costs for the optimal assignment. Gaps are large enough that the rule order dominates distance (< 100 km in
+// Singapore) and one cancellation outweighs every child getting a blacklisted therapist.
+const STEP_COST: Record<RankedCandidate["step"], number> = {
+  team: 0,
+  tier: 1_000,
+  history: 2_000,
+  any: 3_000,
+  blacklisted: 100_000,
+};
+const DISTANCE_UNKNOWN_KM = 50;
+const CANCEL_COST = 10_000_000;
+const IMPOSSIBLE = 1_000_000_000;
 
-  // Who is already busy in each slot (cancelled sessions free their therapist up).
-  const busy: Record<Slot, Set<number>> = { AM: new Set(), PM: new Set() };
-  for (const s of live) if (s.therapistId !== null) busy[s.slot].add(s.therapistId);
+export function proposeReallocations(input: EngineInput): EngineResult {
+  const config = { ...ENGINE_CONFIG, ...input.config };
+  const { therapists, students, absences } = input;
+  const exclusions = input.exclusions ?? new Map<number, Set<number>>();
+  const busy = busyBySlot(input.sessions);
 
-  const affected = live.filter((s) => s.therapistId !== null && isAbsent(absences, s.therapistId, s.slot));
+  const affected = affectedSessions(input.sessions, absences);
 
-  // Hardest-to-fill first: children with the smallest teams get first pick of familiar therapists.
-  // TODO: smarter ordering / global optimisation (e.g. allow chained swaps to avoid cancellations).
-  affected.sort((a, b) => (teams.get(a.studentId)?.size ?? 0) - (teams.get(b.studentId)?.size ?? 0));
+  const freeFor = (session: Session) =>
+    therapists.filter(
+      (t) =>
+        !busy[session.slot].has(t.id) &&
+        !isAbsent(absences, t.id, session.slot) &&
+        !exclusions.get(session.id)?.has(t.id),
+    );
 
-  const proposals: Proposal[] = [];
-  for (const session of affected) {
-    const original = byId.get(session.therapistId!) ?? null;
-    const base = { sessionId: session.id, fromTherapistId: session.therapistId };
+  const base = (s: Session) => ({
+    sessionId: s.id,
+    fromTherapistId: s.therapistId ?? s.originalTherapistId,
+    chainId: null,
+  });
+  const decided = new Map<number, ProposedAssignment>();
 
-    // Hard rule: only the designated therapist may run home or school (shadow) sessions.
-    if (session.location !== "clinic") {
-      proposals.push({
-        ...base,
-        toTherapistId: null,
-        score: null,
-        rationale: [`${session.location} session: only the designated therapist can run it, so it must be cancelled`],
-      });
-      continue;
-    }
+  // Hard rule (optional): home/school sessions need their designated therapist.
+  const open = affected.filter((s) => {
+    if (!(config.designatedOnlyForHomeSchool && s.location !== "clinic")) return true;
+    decided.set(s.id, {
+      ...base(s),
+      toTherapistId: null,
+      step: "cancel",
+      distanceKm: null,
+      rationale: [`${s.location} session: only the designated therapist may run it`],
+    });
+    return false;
+  });
 
-    const team = teams.get(session.studentId) ?? new Set<number>();
-    const candidates = therapists
-      .filter((t) => !busy[session.slot].has(t.id) && !isAbsent(absences, t.id, session.slot))
-      .map((candidate) => scoreCandidate({ candidate, original, teamTherapistIds: team }))
-      .sort((a, b) => b.score - a.score || byId.get(a.therapistId)!.name.localeCompare(byId.get(b.therapistId)!.name));
-
-    const best = candidates[0];
-    if (!best) {
-      proposals.push({ ...base, toTherapistId: null, score: null, rationale: [`No therapist free in the ${session.slot} slot`] });
-      continue;
-    }
-    busy[session.slot].add(best.therapistId);
-    proposals.push({
-      ...base,
-      toTherapistId: best.therapistId,
-      score: best.score,
-      rationale: best.reasons.length ? best.reasons : ["Available in this slot"],
+  // Optimal assignment per slot (AM and PM are independent). Minimises total cost, where a cancellation costs
+  // more than any combination of matches ("any therapist is better than no therapist"), then the agreed rule
+  // order (team < tier < history < any < blacklisted), then distance.
+  for (const slot of ["AM", "PM"] as const) {
+    const rows = open.filter((s) => s.slot === slot);
+    if (rows.length === 0) continue;
+    const pool = therapists.filter((t) => !busy[slot].has(t.id) && !isAbsent(absences, t.id, slot));
+    const ranked = rows.map((s) => {
+      const byTherapist = new Map(rankCandidates(freeFor(s), students.get(s.studentId)!).map((c) => [c.therapistId, c]));
+      return pool.map((t) => byTherapist.get(t.id) ?? null); // null = excluded for this session
+    });
+    // Columns: every free therapist, then one "cancel" column per session.
+    const cost = ranked.map((cands) => [
+      ...cands.map((c) => (c ? STEP_COST[c.step] + (c.distanceKm ?? DISTANCE_UNKNOWN_KM) : IMPOSSIBLE)),
+      ...rows.map(() => CANCEL_COST),
+    ]);
+    minCostAssignment(cost).forEach((col, i) => {
+      const c = col < pool.length ? ranked[i][col] : null;
+      if (!c) return; // cancel column → handled below
+      busy[slot].add(c.therapistId);
+      decided.set(rows[i].id, { ...base(rows[i]), toTherapistId: c.therapistId, step: c.step, distanceKm: c.distanceKm, rationale: c.reasons });
     });
   }
-  return proposals;
+
+  // Anything left: more children need cover in that slot than there are free therapists.
+  for (const s of open) {
+    if (decided.has(s.id)) continue;
+    const hadOptions = freeFor(s).length > 0;
+    decided.set(s.id, {
+      ...base(s),
+      toTherapistId: null,
+      step: "cancel",
+      distanceKm: null,
+      rationale: [
+        hadOptions
+          ? `Every free therapist in the ${s.slot} slot is covering another child`
+          : `No therapist is free in the ${s.slot} slot`,
+      ],
+    });
+  }
+
+  const primary = affected.map((s) => decided.get(s.id)!);
+
+  const swapAlternative = findSwapAlternative({ ...input, config, primary, busy });
+  return { primary, swapAlternative };
 }

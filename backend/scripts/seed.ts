@@ -1,13 +1,13 @@
-// npm run db:seed                 — base data (therapists, students, teams, July 2031 sessions)
-// npm run db:seed -- --scenario   — plus the 11 July 2031 absences from Case-Scenario.docx
+// npm run db:seed                 — base data (therapists, students, teams, July 2031 sessions, past logs)
+// npm run db:seed -- --scenario   — plus the 11 July 2031 disruption from Case-Scenario.docx (as WhatsApp reports)
 import { closeDb, getDb } from "../src/lib/db/client";
-import { SCENARIO_DATE, seedBaseData, seedScenario } from "../src/lib/db/seed";
+import { seedBaseData } from "../src/lib/db/seed";
+import { SCENARIO_DATE, seedScenario } from "../src/lib/services/demo-scenario";
 
-const db = getDb();
-seedBaseData(db);
+seedBaseData(getDb());
 console.log("Seeded base data.");
 if (process.argv.includes("--scenario")) {
-  seedScenario(db);
-  console.log(`Seeded case scenario absences for ${SCENARIO_DATE}.`);
+  seedScenario();
+  console.log(`Seeded case scenario for ${SCENARIO_DATE} and generated a draft plan.`);
 }
 closeDb();

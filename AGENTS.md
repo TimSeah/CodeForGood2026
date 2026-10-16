@@ -22,15 +22,18 @@ and the sample data in `docs/data/` (schedules, case allocation, and the 11 July
 | Slot | `AM` (≈8:30–12:00) or `PM` (≈2:00–5:30). Exact times vary per session. |
 | MWF / TT | Weekly patterns: Mon-Wed-Fri vs Tue-Thu. A child has a fixed therapist per pattern + slot. |
 | Team | The 1–4 therapists who regularly work with a child. Best replacements come from the team. |
-| Home / School session | Only the child's designated therapist may run it → if they're away, the session is cancelled. |
+| Plan (tier) | **Core** → juniors only · **Advanced** → senior/junior mix · **Specialised** → seniors only |
+| Blacklist | Therapists a child's parents aren't comfortable with: last resort only. |
+| Home / School session | Case brief says designated therapist only; **unconfirmed** — behind a config flag (default: reassignable). |
 | OL | "Observing / overlapping" in the therapist sheets — not truly free. Only "OL/Replacement" means free. |
 
-Matching rules, in priority order:
-1. **Hard:** the replacement must be working, not absent, and not already booked in that slot.
-2. **Hard:** home/school sessions can't be reassigned.
-3. **Soft:** prefer someone on the child's team (familiarity).
-4. **Soft:** senior → senior; junior covering a senior's case is allowed but worse.
-5. If nobody fits → propose cancellation (worst case). Minimise cancellations overall.
+Matching rules (full spec + flow: **[docs/plans/rescheduling.md](docs/plans/rescheduling.md)** — read it before
+touching rescheduling, approval, intake or messaging):
+1. **Hard:** the replacement must be working, not absent, not already booked in that slot, not declined by the parent.
+2. Minimise cancellations ("any therapist is better than no therapist").
+3. Then: same team → tier match → covered this child before → anyone → blacklisted. Ties broken by distance.
+4. Chain swaps (A→B's child, B→C) only as a separate alternative plan, and only if they avoid a cancellation.
+5. Admin approves every plan; parents must accept via WhatsApp (or admin records it) by start − 15 min.
 
 ⚠️ The case study uses a **fictional calendar**: 3 July 2031 is a Monday and 11 July 2031 is a Tuesday in the
 documents. Seed data follows the documents. Don't "fix" weekdays with `Date#getDay()`.
@@ -48,7 +51,10 @@ documents. Seed data follows the documents. Don't "fix" weekdays with `Date#getD
 ```
 
 The frontend calls `/api/*`; Vite proxies that to `http://localhost:3001`. No CORS, no auth (local prototype).
-The bot collects reports separately; it does not yet send absences to the backend API.
+The bot collects reports into its own SQLite file; the backend **reads** it (read-only, `BOT_DB_PATH`) via
+`POST /api/intake/sync`. Outbound WhatsApp (asking parents to confirm, briefing substitutes) is a **placeholder**
+(`backend/src/lib/services/whatsapp/gateway.ts`, marked `TODO(bot-integration)`) until the bot exposes a send API;
+parent replies should go to `POST /api/whatsapp/responses`.
 For bot changes, run `npm test` from `bot/` (Node 24+).
 
 ## Running everything

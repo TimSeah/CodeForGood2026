@@ -1,11 +1,11 @@
 // Small shared presentational components. Keep these dumb: props in, markup out — no data fetching.
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect } from "react";
 
 export function Card({ title, actions, children }: { title?: string; actions?: ReactNode; children: ReactNode }) {
   return (
     <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
       {(title || actions) && (
-        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
           {title && <h2 className="font-medium">{title}</h2>}
           {actions}
         </div>
@@ -52,6 +52,60 @@ export function DateInput({ value, onChange }: { value: string; onChange: (date:
       onChange={(e) => e.target.value && onChange(e.target.value)}
       className="rounded-md border border-slate-300 px-2 py-1 text-sm"
     />
+  );
+}
+
+export const inputClass = "rounded-md border border-slate-300 bg-white px-2 py-1 text-sm";
+
+export function Tabs<T extends string>({
+  value,
+  onChange,
+  tabs,
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  tabs: { value: T; label: ReactNode }[];
+}) {
+  return (
+    <div className="inline-flex rounded-md border border-slate-200 bg-white p-0.5" role="tablist">
+      {tabs.map((t) => (
+        <button
+          key={t.value}
+          role="tab"
+          aria-selected={value === t.value}
+          onClick={() => onChange(t.value)}
+          className={`rounded px-3 py-1 text-sm ${value === t.value ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Minimal accessible modal. Closes on backdrop click or Escape. */
+export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className="w-full max-w-lg rounded-lg bg-white p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="mb-3 text-lg font-semibold">{title}</h2>
+        {children}
+      </div>
+    </div>
   );
 }
 

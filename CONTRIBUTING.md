@@ -13,7 +13,7 @@ cd backend && npm install && npm run db:reset && npm run dev
 cd frontend && npm install && npm run dev
 ```
 
-Open http://localhost:5173. Pick 11 July 2031 (the default) → **Generate proposals** → approve/reject.
+Open http://localhost:5173 (11 July 2031 by default) → **Disruptions** → **Review draft plan** → edit / approve.
 
 ## Git workflow
 
