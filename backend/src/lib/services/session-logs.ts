@@ -9,9 +9,11 @@ import {
   type SessionLogInput,
   updateSessionLog,
 } from "@/lib/repositories/session-logs";
+import { getVideoReviewForSessionLog } from "@/lib/repositories/video-reviews";
 import { getStudent } from "@/lib/repositories/students";
 import { getTherapist } from "@/lib/repositories/therapists";
 import type { SessionLog } from "@/lib/types";
+import { removeSessionVideoFiles } from "./video-reviews";
 
 // Session logs (therapist portal): attendance + what happened. They feed the engine's "history" step and the
 // handover sent to substitute therapists.
@@ -49,12 +51,14 @@ export function editSessionLog(id: number, input: Partial<SessionLogInput>, acto
   return getSessionLog(id)!;
 }
 
-export function removeSessionLog(id: number, actor: string) {
+export async function removeSessionLog(id: number, actor: string) {
   getSessionLogOrThrow(id);
+  const videoReview = getVideoReviewForSessionLog(id);
   getDb().transaction(() => {
     deleteSessionLog(id);
     logAudit({ actor, action: "session_log.deleted", entityType: "session_log", entityId: id });
   })();
+  await removeSessionVideoFiles(videoReview);
 }
 
 /** A one-session PDF for the substitute therapist. Contains ONLY this log — no other portal data. */
@@ -101,6 +105,14 @@ export async function renderSessionLogPdf(log: SessionLog, shareableOnly = false
     write(label, { font: bold, size: 12, gap: 0 });
     write(value?.trim() || "-", { gap: 12 });
   };
+  const videoTimestamp = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const remainder = Math.floor(seconds % 60);
+    return hours > 0
+      ? `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`
+      : `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
+  };
 
   write("Session log (confidential)", { font: bold, size: 18, gap: 4 });
   write("For the covering therapist only. Do not forward.", { size: 9, gap: 16 });
@@ -109,6 +121,17 @@ export async function renderSessionLogPdf(log: SessionLog, shareableOnly = false
   section("Therapist", log.therapistName);
   section("Attendance", log.attendance);
   section("Summary", log.summary);
+  if (log.videoReview) {
+    section("Video gist", log.videoReview.summary ?? "Recording uploaded; highlights have not been generated yet.");
+    if (log.videoReview.clips.length) {
+      section(
+        "Video highlights",
+        log.videoReview.clips
+          .map((clip) => `${videoTimestamp(clip.startSeconds)} - ${videoTimestamp(clip.endSeconds)}  ${clip.title}: ${clip.caption}`)
+          .join("\n"),
+      );
+    }
+  }
   section("Goals / programmes worked on", log.goals);
   if (!shareableOnly) section("Notes", log.notes);
   return pdf.save();
